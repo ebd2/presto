@@ -24,10 +24,17 @@ SERVICE_USER='presto'
 # Launcher Config.
 # Use data-dir from node.properties file (assumes it to be at /etc/presto). For other args use defaults from rpm install
 NODE_PROPERTIES=/etc/presto/node.properties
+LOG_PROPRTIES=/etc/presto/log.properties
 DATA_DIR=$(grep -Po "(?<=^node.data-dir=).*" $NODE_PROPERTIES)
 SERVER_LOG_FILE=$(grep -Po "(?<=^node.server-log-file=).*" $NODE_PROPERTIES)
 LAUNCHER_LOG_FILE=$(grep -Po "(?<=^node.launcher-log-file=).*" $NODE_PROPERTIES)
-CONFIGURATION=(--launcher-config /usr/lib/presto/bin/launcher.properties --data-dir "$DATA_DIR" --node-config "$NODE_PROPERTIES" --jvm-config /etc/presto/jvm.config --config /etc/presto/config.properties --launcher-log-file "${LAUNCHER_LOG_FILE:-/var/log/presto/launcher.log}" --server-log-file "${SERVER_LOG_FILE:-/var/log/presto/server.log}" --log-levels-file "/etc/presto/log.properties")
+CONFIGURATION=(--launcher-config /usr/lib/presto/bin/launcher.properties --data-dir "$DATA_DIR" --node-config "$NODE_PROPERTIES" --jvm-config /etc/presto/jvm.config --config /etc/presto/config.properties --launcher-log-file "${LAUNCHER_LOG_FILE:-/var/log/presto/launcher.log}" --server-log-file "${SERVER_LOG_FILE:-/var/log/presto/server.log}")
+
+if [ -f "$LOG_PROPERTIES" ]
+then
+    LOG_LEVEL_CONFIGURATION=(--log-levels-file "LOG_PROPERTIES")
+    CONFIGURATION=(${CONFIGURATION[@]} ${LOG_LEVEL_CONFIGURATION[@]})
+fi
 
 source /etc/presto/env.sh
 
