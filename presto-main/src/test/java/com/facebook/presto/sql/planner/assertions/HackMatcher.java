@@ -15,11 +15,12 @@ package com.facebook.presto.sql.planner.assertions;
 
 import com.facebook.presto.Session;
 import com.facebook.presto.metadata.Metadata;
+import com.facebook.presto.sql.planner.Symbol;
 import com.facebook.presto.sql.planner.plan.PlanNode;
 
-public interface Matcher
-{
-    boolean downMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases);
+import java.util.Optional;
 
-    boolean upMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases);
+public interface HackMatcher
+{
+    Optional<Symbol> getSymbol(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases);
 }

@@ -23,6 +23,7 @@ import java.util.List;
 
 import static com.facebook.presto.util.ImmutableCollectors.toImmutableList;
 import static com.google.common.base.Preconditions.checkState;
+import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 
 final class PlanMatchingVisitor
@@ -47,24 +48,39 @@ final class PlanMatchingVisitor
     @Override
     protected Boolean visitPlan(PlanNode node, PlanMatchingContext context)
     {
-        List<PlanMatchingState> states = context.getPattern().matches(node, session, metadata, context.getExpressionAliases());
+        List<PlanMatchingState> states = context.getPattern().downMatches(node, session, metadata, context.getExpressionAliases());
 
         if (states.isEmpty()) {
             return false;
         }
 
         if (node.getSources().isEmpty()) {
-            return !filterTerminated(states).isEmpty();
+            int terminatedUpMatchCount = 0;
+            for (PlanMatchingState state : states) {
+                if (!state.isTerminated()) {
+                    continue;
+                }
+                if (context.getPattern().upMatches(node, session, metadata, context.getExpressionAliases())) {
+                    terminatedUpMatchCount++;
+                }
+            }
+
+            checkState(terminatedUpMatchCount < 2, format("Ambiguous shape match on leaf node %s", node));
+            return terminatedUpMatchCount == 1;
         }
 
         for (PlanMatchingState state : states) {
             checkState(node.getSources().size() == state.getPatterns().size(), "Matchers count does not match count of sources");
             int i = 0;
             boolean sourcesMatch = true;
+            ExpressionAliases stateAliases = new ExpressionAliases();
             for (PlanNode source : node.getSources()) {
-                sourcesMatch = sourcesMatch && source.accept(this, state.createContext(i++));
+                PlanMatchingContext sourceContext = state.createContext(i++);
+                sourcesMatch = sourcesMatch && source.accept(this, sourceContext);
+                stateAliases.putSourceAliases(sourceContext.getExpressionAliases());
             }
-            if (sourcesMatch) {
+            if (sourcesMatch && context.getPattern().upMatches(node, session, metadata, stateAliases)) {
+                context.getExpressionAliases().putSourceAliases(stateAliases);
                 return true;
             }
         }

@@ -19,6 +19,7 @@ import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Multimap;
 
+import java.util.Collection;
 import java.util.Map;
 
 import static com.google.common.base.Preconditions.checkState;
@@ -49,6 +50,22 @@ public final class ExpressionAliases
             checkState(!map.values().contains(expression), "Expression '%s' is already pointed by different alias than '%s', check mapping for '%s'", expression, alias, map);
             map.put(alias, expression);
         }
+    }
+
+    public void putSourceAliases(ExpressionAliases sourceAliases)
+    {
+        for (String alias : sourceAliases.map.keySet()) {
+            Collection<Expression> values = sourceAliases.map.get(alias);
+            // TODO: remove after making this a map.
+            checkState(values.size() == 1, "Multiple expressions with the same alias %s", alias);
+            put(alias, values.iterator().next());
+        }
+    }
+
+    public Collection<Expression> get(String alias)
+    {
+        alias = alias(alias);
+        return map.get(alias);
     }
 
     private String alias(String alias)

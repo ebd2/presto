@@ -132,7 +132,7 @@ public final class PlanMatchPattern
         this.sourcePatterns = ImmutableList.copyOf(sourcePatterns);
     }
 
-    List<PlanMatchingState> matches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
+    List<PlanMatchingState> downMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
     {
         ImmutableList.Builder<PlanMatchingState> states = ImmutableList.builder();
         if (anyTree) {
@@ -144,10 +144,15 @@ public final class PlanMatchPattern
                 states.add(new PlanMatchingState(ImmutableList.of(this), expressionAliases));
             }
         }
-        if (node.getSources().size() == sourcePatterns.size() && matchers.stream().allMatch(it -> it.matches(node, session, metadata, expressionAliases))) {
+        if (node.getSources().size() == sourcePatterns.size() && matchers.stream().allMatch(it -> it.downMatches(node, session, metadata, expressionAliases))) {
             states.add(new PlanMatchingState(sourcePatterns, expressionAliases));
         }
         return states.build();
+    }
+
+    boolean upMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
+    {
+        return matchers.stream().allMatch(it -> it.upMatches(node, session, metadata, expressionAliases));
     }
 
     /*
@@ -199,6 +204,23 @@ public final class PlanMatchPattern
     public PlanMatchPattern with(Matcher matcher)
     {
         matchers.add(matcher);
+        return this;
+    }
+
+    public PlanMatchPattern withAlias(String alias, HackMatcher matcher)
+    {
+        matchers.add(new Alias(alias, matcher));
+        return this;
+    }
+
+    public static HackMatcher columnReference(String tableName, String columnName)
+    {
+        return new ColumnReference(tableName, columnName);
+    }
+
+    public PlanMatchPattern withOutput(String alias)
+    {
+        matchers.add(new OutputMatcher(alias));
         return this;
     }
 

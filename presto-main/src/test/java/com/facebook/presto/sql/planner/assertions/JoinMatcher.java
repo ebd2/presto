@@ -22,6 +22,7 @@ import com.facebook.presto.sql.planner.plan.PlanNode;
 import java.util.List;
 
 import static com.google.common.base.MoreObjects.toStringHelper;
+import static com.google.common.base.Preconditions.checkState;
 import static java.util.Objects.requireNonNull;
 
 final class JoinMatcher
@@ -37,8 +38,16 @@ final class JoinMatcher
     }
 
     @Override
-    public boolean matches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
+    public boolean downMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
     {
+        return node instanceof JoinNode;
+    }
+
+    @Override
+    public boolean upMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
+    {
+        checkState(downMatches(node, session, metadata, expressionAliases));
+
         if (node instanceof JoinNode) {
             JoinNode joinNode = (JoinNode) node;
             if (joinNode.getType() != joinType) {
