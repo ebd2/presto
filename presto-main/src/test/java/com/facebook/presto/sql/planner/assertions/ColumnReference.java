@@ -56,14 +56,11 @@ public class ColumnReference
             return Optional.empty();
         }
 
-        Optional<ColumnHandle> columnHandle = getColumnHandle(tableScanNode.getTable(), session, metadata);
+        ColumnHandle columnHandle = getColumnHandle(tableScanNode.getTable(), session, metadata);
 
-        // Table doesn't have a column with the expected name -> doesn't match.
-        if (!columnHandle.isPresent()) {
-            return Optional.empty();
-        }
+        requireNonNull(columnHandle, format("Table %s doesn't have a column %s. Typo in test?", tableName, columnName));
 
-        return getAssignedSymbol(tableScanNode, columnHandle.get());
+        return getAssignedSymbol(tableScanNode, columnHandle);
     }
 
     private Optional<Symbol> getAssignedSymbol(TableScanNode tableScanNode, ColumnHandle columnHandle)
@@ -77,14 +74,14 @@ public class ColumnReference
         return Optional.empty();
     }
 
-    private Optional<ColumnHandle> getColumnHandle(TableHandle tableHandle, Session session, Metadata metadata)
+    private ColumnHandle getColumnHandle(TableHandle tableHandle, Session session, Metadata metadata)
     {
         for (Map.Entry<String, ColumnHandle> entry : metadata.getColumnHandles(session, tableHandle).entrySet()) {
             if (columnName.equals(entry.getKey())) {
-                return Optional.of(entry.getValue());
+                return entry.getValue();
             }
         }
-        return Optional.empty();
+        return null;
     }
 
     @Override

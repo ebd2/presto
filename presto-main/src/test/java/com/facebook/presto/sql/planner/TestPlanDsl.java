@@ -97,12 +97,21 @@ public class TestPlanDsl
     }
 
     @Test(expectedExceptions = { NullPointerException.class })
+    public void testBadColumn()
+    {
+        assertPlan("SELECT orderkey FROM lineitem",
+                node(OutputNode.class,
+                        node(TableScanNode.class).withAlias("ORDERKEY", columnReference("lineitem", "NXCOLUMN")))
+                .withOutput("NXALIAS"));
+    }
+
+    @Test(expectedExceptions = { NullPointerException.class })
     public void testBadAlias()
     {
         assertPlan("SELECT orderkey FROM lineitem",
                 node(OutputNode.class,
                         node(TableScanNode.class).withAlias("ORDERKEY", lineitemOrderkeyColumn))
-                .withOutput("NXALIAS"));
+                        .withOutput("NXALIAS"));
     }
 
     @Test(expectedExceptions = { IllegalStateException.class })
