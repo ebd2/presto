@@ -13,6 +13,7 @@
  */
 package com.facebook.presto.sql.planner.assertions;
 
+import com.facebook.presto.sql.planner.Symbol;
 import com.facebook.presto.sql.tree.AstVisitor;
 import com.facebook.presto.sql.tree.ComparisonExpression;
 import com.facebook.presto.sql.tree.Expression;
@@ -149,14 +150,23 @@ final class ExpressionVerifier
     @Override
     protected Boolean visitQualifiedNameReference(QualifiedNameReference actual, Expression expected)
     {
-        // return expressionAliases.get(expected.toString()).equals(actual);
-        expressionAliases.put(expected.toString(), actual);
-        return true;
+        if (!(expected instanceof QualifiedNameReference)) {
+            return false;
+        }
+        return expressionAliases.get(expected.toString()).equals(actual);
     }
 
+    /*
+     * Sometimes the parser is a little hazy about the type that an alias is when we parse the expected expression
+     * and it incorrectly picks QualifiedNameReference when the type should actually be a symbol reference.
+     * Since we're just going to toString() it anyway, this isn't a problem.
+     */
     @Override
     protected Boolean visitSymbolReference(SymbolReference actual, Expression expected)
     {
+        if (!(expected instanceof SymbolReference || expected instanceof QualifiedNameReference)) {
+            return false;
+        }
         return expressionAliases.get(expected.toString()).equals(actual);
     }
 }

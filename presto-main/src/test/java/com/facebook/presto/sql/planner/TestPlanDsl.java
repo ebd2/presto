@@ -29,6 +29,7 @@ import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.any;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.anyTree;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.columnReference;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.equiJoinClause;
+import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.expression;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.join;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.node;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.tableScan;
@@ -70,8 +71,9 @@ public class TestPlanDsl
         assertPlan("SELECT orderkey, 2 FROM lineitem",
                 node(OutputNode.class,
                         node(ProjectNode.class,
-                                tableScan("lineitem").withAlias("ORDERKEY", lineitemOrderkeyColumn)))
-                        .withOutput("ORDERKEY"));
+                                tableScan("lineitem").withAlias("ORDERKEY", lineitemOrderkeyColumn))
+                                .withAlias("TWO", expression("2")))
+                       .withOutput("ORDERKEY").withOutput("TWO"));
     }
 
     @Test

@@ -304,6 +304,11 @@ public final class PlanMatchPattern
         return new ColumnReference(tableName, columnName);
     }
 
+    public static HackMatcher expression(String expression)
+    {
+        return new ExpressionAssignment(expression);
+    }
+
     public PlanMatchPattern withOutput(String alias)
     {
         matchers.add(new OutputMatcher(alias));
