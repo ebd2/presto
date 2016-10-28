@@ -14,9 +14,9 @@
 package com.facebook.presto.sql.planner;
 
 import com.facebook.presto.spi.predicate.Domain;
+import com.facebook.presto.sql.planner.assertions.HackMatcher;
 import com.facebook.presto.sql.planner.assertions.PlanAssert;
 import com.facebook.presto.sql.planner.assertions.PlanMatchPattern;
-import com.facebook.presto.sql.planner.plan.AggregationNode;
 import com.facebook.presto.sql.planner.plan.ApplyNode;
 import com.facebook.presto.sql.planner.plan.EnforceSingleRowNode;
 import com.facebook.presto.sql.planner.plan.IndexJoinNode;
@@ -36,16 +36,16 @@ import java.util.function.Predicate;
 
 import static com.facebook.presto.spi.predicate.Domain.singleValue;
 import static com.facebook.presto.spi.type.VarcharType.createVarcharType;
-import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.aliasPair;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.any;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.anyTree;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.apply;
+import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.columnReference;
+import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.equiJoinClause;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.filter;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.join;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.node;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.project;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.semiJoin;
-import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.symbolStem;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.tableScan;
 import static com.facebook.presto.sql.planner.plan.JoinNode.Type.INNER;
 import static com.facebook.presto.sql.planner.plan.JoinNode.Type.LEFT;
@@ -59,6 +59,9 @@ public class TestLogicalPlanner
 {
     private final LocalQueryRunner queryRunner;
 
+    private final HackMatcher ordersOrderkeyColumn;
+    private final HackMatcher lineitemOrderkeyColumn;
+
     public TestLogicalPlanner()
     {
         this.queryRunner = new LocalQueryRunner(testSessionBuilder()
@@ -69,6 +72,9 @@ public class TestLogicalPlanner
         queryRunner.createCatalog(queryRunner.getDefaultSession().getCatalog().get(),
                 new TpchConnectorFactory(1),
                 ImmutableMap.<String, String>of());
+
+        this.ordersOrderkeyColumn = columnReference("orders", "orderkey");
+        this.lineitemOrderkeyColumn = columnReference("lineitem", "orderkey");
     }
 
     @Test
@@ -76,11 +82,11 @@ public class TestLogicalPlanner
     {
         assertPlan("SELECT o.orderkey FROM orders o, lineitem l WHERE l.orderkey = o.orderkey",
                 anyTree(
-                        join(INNER, ImmutableList.of(aliasPair("O", "L")),
+                        join(INNER, ImmutableList.of(equiJoinClause("ORDERS_OK", "LINEITEM_OK")),
                                 any(
-                                        tableScan("orders").withSymbol(symbolStem("orderkey"), "O")),
+                                        tableScan("orders").withAlias("ORDERS_OK", ordersOrderkeyColumn)),
                                 anyTree(
-                                        tableScan("lineitem").withSymbol(symbolStem("orderkey"), "L")))));
+                                        tableScan("lineitem").withAlias("LINEITEM_OK", lineitemOrderkeyColumn)))));
     }
 
     @Test
@@ -88,13 +94,13 @@ public class TestLogicalPlanner
     {
         assertPlan("SELECT * FROM orders WHERE orderkey = (SELECT orderkey FROM lineitem ORDER BY orderkey LIMIT 1)",
                 anyTree(
-                        join(INNER, ImmutableList.of(aliasPair("X", "Y")),
+                        join(INNER, ImmutableList.of(equiJoinClause("X", "Y")),
                                 project(
-                                        tableScan("orders").withSymbol(symbolStem("orderkey"), "X")),
+                                        tableScan("orders").withAlias("X", ordersOrderkeyColumn)),
                                 project(
                                         node(EnforceSingleRowNode.class,
                                                 anyTree(
-                                                        tableScan("lineitem").withSymbol(symbolStem("orderkey"), "Y")))))));
+                                                        tableScan("lineitem").withAlias("Y", lineitemOrderkeyColumn)))))));
 
         assertPlan("SELECT * FROM orders WHERE orderkey IN (SELECT orderkey FROM lineitem WHERE linenumber % 4 = 0)",
                 anyTree(
@@ -102,9 +108,9 @@ public class TestLogicalPlanner
                                 project(
                                         semiJoin("X", "Y", "S",
                                                 anyTree(
-                                                        tableScan("orders").withSymbol(symbolStem("orderkey"), "X")),
+                                                        tableScan("orders").withAlias("X", ordersOrderkeyColumn)),
                                                 anyTree(
-                                                        tableScan("lineitem").withSymbol(symbolStem("orderkey"), "Y")))))));
+                                                        tableScan("lineitem").withAlias("Y", lineitemOrderkeyColumn)))))));
 
         assertPlan("SELECT * FROM orders WHERE orderkey NOT IN (SELECT orderkey FROM lineitem WHERE linenumber < 0)",
                 anyTree(
@@ -112,9 +118,9 @@ public class TestLogicalPlanner
                                 project(
                                         semiJoin("X", "Y", "S",
                                                 anyTree(
-                                                        tableScan("orders").withSymbol(symbolStem("orderkey"), "X")),
+                                                        tableScan("orders").withAlias("X", ordersOrderkeyColumn)),
                                                 anyTree(
-                                                        tableScan("lineitem").withSymbol(symbolStem("orderkey"), "Y")))))));
+                                                        tableScan("lineitem").withAlias("Y", lineitemOrderkeyColumn)))))));
     }
 
     @Test
@@ -128,11 +134,15 @@ public class TestLogicalPlanner
                 "SELECT nationkey FROM nation LEFT OUTER JOIN region " +
                         "ON nation.regionkey = region.regionkey and nation.name = region.name WHERE nation.name = 'blah'",
                 anyTree(
-                        join(LEFT, ImmutableList.of(aliasPair("name", "name_1"), aliasPair("regionkey", "regionkey_0")),
+                        join(LEFT, ImmutableList.of(equiJoinClause("NATION_NAME", "REGION_NAME"), equiJoinClause("NATION_REGIONKEY", "REGION_REGIONKEY")),
                                 anyTree(
-                                        tableScan("nation", tableScanConstraint)),
+                                        tableScan("nation", tableScanConstraint)
+                                                .withAlias("NATION_NAME", columnReference("nation", "name"))
+                                                .withAlias("NATION_REGIONKEY", columnReference("nation", "regionkey"))),
                                 anyTree(
-                                        tableScan("region", tableScanConstraint)))));
+                                        tableScan("region", tableScanConstraint)
+                                                .withAlias("REGION_NAME", columnReference("region", "name"))
+                                                .withAlias("REGION_REGIONKEY", columnReference("region", "regionkey"))))));
     }
 
     @Test
@@ -195,12 +205,13 @@ public class TestLogicalPlanner
                 anyTree(
                         filter("3 = X",
                                 apply(ImmutableList.of("X"),
-                                        tableScan("orders").withSymbol(symbolStem("orderkey"), "X"),
+                                        tableScan("orders").withAlias("X", ordersOrderkeyColumn),
                                         node(EnforceSingleRowNode.class,
                                                 project(
                                                         node(ValuesNode.class)
                                                 ))))));
 
+        /*
         // double nesting
         assertPlan(
                 "SELECT orderkey FROM orders o " +
@@ -210,16 +221,18 @@ public class TestLogicalPlanner
                         filter("3 IN (C)",
                                 apply(ImmutableList.of("C", "O"),
                                         project(
-                                                tableScan("orders").withSymbol(symbolStem("orderkey"), "O").withSymbol(symbolStem("custkey"), "C")),
+                                                tableScan("orders").withAlias("O", ordersOrderkeyColumn).withAlias("C", columnReference("orders", "custkey"))),
                                         anyTree(
                                                 apply(ImmutableList.of("L"),
-                                                        tableScan("lineitem").withSymbol(symbolStem("orderkey"), "L"),
+                                                        tableScan("lineitem").withAlias("L", lineitemOrderkeyColumn),
                                                         node(EnforceSingleRowNode.class,
                                                                 project(
                                                                         node(ValuesNode.class)
                                                                 ))))))));
+        */
     }
 
+    /*
     @Test
     public void testCorrelatedScalarAggregationRewriteToLeftOuterJoin()
     {
@@ -237,6 +250,7 @@ public class TestLogicalPlanner
                                                                         node(ValuesNode.class)
                                                                 ))))))));
     }
+    */
 
     private void assertPlan(String sql, PlanMatchPattern pattern)
     {

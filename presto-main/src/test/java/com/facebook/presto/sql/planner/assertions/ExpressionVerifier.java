@@ -149,6 +149,7 @@ final class ExpressionVerifier
     @Override
     protected Boolean visitQualifiedNameReference(QualifiedNameReference actual, Expression expected)
     {
+        // return expressionAliases.get(expected.toString()).equals(actual);
         expressionAliases.put(expected.toString(), actual);
         return true;
     }
@@ -156,7 +157,6 @@ final class ExpressionVerifier
     @Override
     protected Boolean visitSymbolReference(SymbolReference actual, Expression expected)
     {
-        expressionAliases.put(expected.toString(), actual);
-        return true;
+        return expressionAliases.get(expected.toString()).equals(actual);
     }
 }

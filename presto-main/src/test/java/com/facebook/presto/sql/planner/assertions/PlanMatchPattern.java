@@ -104,9 +104,95 @@ public final class PlanMatchPattern
         return node(SemiJoinNode.class, source, filtering).with(new SemiJoinMatcher(sourceSymbolAlias, filteringSymbolAlias, outputAlias));
     }
 
-    public static PlanMatchPattern join(JoinNode.Type joinType, List<AliasPair> expectedEquiCriteria, PlanMatchPattern left, PlanMatchPattern right)
+    public static PlanMatchPattern join(JoinNode.Type joinType, List<EquiMaker> expectedEquiCriteria, PlanMatchPattern left, PlanMatchPattern right)
     {
         return node(JoinNode.class, left, right).with(new JoinMatcher(joinType, expectedEquiCriteria));
+    }
+
+    public static class MagicSymbol
+    {
+        private final String alias;
+
+        public MagicSymbol(String alias)
+        {
+            this.alias = requireNonNull(alias, "alias is null");
+        }
+
+        public Symbol toSymbol(ExpressionAliases aliases)
+        {
+            return new AliasedSymbol(alias, aliases);
+        }
+
+        private static class AliasedSymbol
+                extends Symbol
+        {
+            private final String alias;
+            private final ExpressionAliases aliases;
+
+            private AliasedSymbol(String alias, ExpressionAliases aliases)
+            {
+                super(alias);
+                this.alias = requireNonNull(alias);
+                this.aliases = requireNonNull(aliases);
+            }
+
+            public String getName()
+            {
+                Expression value = aliases.get(alias);
+                checkState(value instanceof SymbolReference, "%s is not a SymbolReference", value);
+                SymbolReference reference = (SymbolReference) value;
+                return ((SymbolReference) value).getName();
+            }
+
+            @Override
+            public boolean equals(Object obj)
+            {
+                if (this == obj) {
+                    return true;
+                }
+
+                if (obj == null || !Symbol.class.equals(obj.getClass())) {
+                    return false;
+                }
+
+                Symbol other = (Symbol) obj;
+
+                return Objects.equals(getName(), other.getName());
+            }
+
+            @Override
+            public int hashCode()
+            {
+                return getName().hashCode();
+            }
+        }
+    }
+
+    static class EquiMaker
+    {
+        MagicSymbol left;
+        MagicSymbol right;
+
+        public EquiMaker(MagicSymbol left, MagicSymbol right)
+        {
+            this.left = requireNonNull(left);
+            this.right = requireNonNull(right);
+        }
+
+        public JoinNode.EquiJoinClause rehydrate(ExpressionAliases aliases)
+        {
+            return new JoinNode.EquiJoinClause(left.toSymbol(aliases), right.toSymbol(aliases));
+        }
+    }
+
+    public static EquiMaker equiJoinClause(String left, String right)
+    {
+        return new EquiMaker(new MagicSymbol(left), new MagicSymbol(right));
+    }
+
+    public static MagicSymbol symbol(String alias)
+    {
+        return new MagicSymbol(alias);
     }
 
     public static AliasPair aliasPair(String left, String right)

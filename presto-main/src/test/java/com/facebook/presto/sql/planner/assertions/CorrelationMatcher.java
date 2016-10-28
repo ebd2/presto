@@ -22,6 +22,7 @@ import com.facebook.presto.sql.planner.plan.PlanNode;
 import java.util.List;
 
 import static com.google.common.base.MoreObjects.toStringHelper;
+import static com.google.common.base.Preconditions.checkState;
 import static java.util.Objects.requireNonNull;
 
 public class CorrelationMatcher
@@ -43,20 +44,20 @@ public class CorrelationMatcher
     @Override
     public boolean upMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
     {
-        if (node instanceof ApplyNode) {
-            ApplyNode applyNode = (ApplyNode) node;
+        checkState(downMatches(node, session, metadata, expressionAliases));
+        ApplyNode applyNode = (ApplyNode) node;
 
-            if (correlation.size() != applyNode.getCorrelation().size()) {
+        if (correlation.size() != applyNode.getCorrelation().size()) {
+            return false;
+        }
+
+        int i = 0;
+        for (String alias : correlation) {
+            if (!expressionAliases.get(alias).equals(applyNode.getCorrelation().get(i++).toSymbolReference())) {
                 return false;
             }
-
-            int i = 0;
-            for (String alias : correlation) {
-                expressionAliases.put(alias, applyNode.getCorrelation().get(i++).toSymbolReference());
-            }
-            return true;
         }
-        return false;
+        return true;
     }
 
     @Override

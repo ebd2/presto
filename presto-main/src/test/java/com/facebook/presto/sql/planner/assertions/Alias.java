@@ -20,6 +20,7 @@ import com.facebook.presto.sql.planner.plan.PlanNode;
 
 import java.util.Optional;
 
+import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 
 public class Alias
@@ -52,5 +53,11 @@ public class Alias
             expressionAliases.put(alias, symbol.get().toSymbolReference());
         }
         return symbol.isPresent();
+    }
+
+    @Override
+    public String toString()
+    {
+        return format("%s -> %s", alias, matcher);
     }
 }

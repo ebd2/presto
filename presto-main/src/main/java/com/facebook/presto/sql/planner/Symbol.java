@@ -68,7 +68,7 @@ public class Symbol
 
         Symbol symbol = (Symbol) o;
 
-        if (!name.equals(symbol.name)) {
+        if (!getName().equals(symbol.getName())) {
             return false;
         }
 
@@ -78,12 +78,12 @@ public class Symbol
     @Override
     public int hashCode()
     {
-        return name.hashCode();
+        return getName().hashCode();
     }
 
     @Override
     public int compareTo(Symbol o)
     {
-        return name.compareTo(o.name);
+        return getName().compareTo(o.getName());
     }
 }

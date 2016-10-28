@@ -25,6 +25,7 @@ import com.facebook.presto.sql.planner.plan.TableScanNode;
 import java.util.Map;
 import java.util.Optional;
 
+import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 
 public class ColumnReference
@@ -84,5 +85,11 @@ public class ColumnReference
             }
         }
         return Optional.empty();
+    }
+
+    @Override
+    public String toString()
+    {
+        return format("%s.%s", tableName, columnName);
     }
 }

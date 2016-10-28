@@ -19,8 +19,6 @@ import com.facebook.presto.sql.planner.Symbol;
 import com.facebook.presto.sql.planner.plan.PlanNode;
 import com.facebook.presto.sql.tree.Expression;
 
-import java.util.Collection;
-
 import static java.util.Objects.requireNonNull;
 
 public class OutputMatcher
@@ -42,9 +40,9 @@ public class OutputMatcher
     @Override
     public boolean upMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
     {
-        Collection<Expression> expressions = expressionAliases.get(alias);
+        Expression expression = expressionAliases.get(alias);
         for (Symbol outputSymbol : node.getOutputSymbols()) {
-            if (expressions.contains(outputSymbol.toSymbolReference())) {
+            if (expression.equals(outputSymbol.toSymbolReference())) {
                 return true;
             }
         }
