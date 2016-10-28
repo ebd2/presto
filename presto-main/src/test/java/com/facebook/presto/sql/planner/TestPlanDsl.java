@@ -32,6 +32,8 @@ import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.equiJo
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.expression;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.join;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.node;
+import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.output;
+import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.project;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.tableScan;
 import static com.facebook.presto.sql.planner.plan.JoinNode.Type.INNER;
 import static com.facebook.presto.testing.TestingSession.testSessionBuilder;
@@ -69,11 +71,9 @@ public class TestPlanDsl
     public void testAliasConstantFromProject()
     {
         assertPlan("SELECT orderkey, 2 FROM lineitem",
-                node(OutputNode.class,
-                        node(ProjectNode.class,
-                                tableScan("lineitem").withAlias("ORDERKEY", lineitemOrderkeyColumn))
-                                .withAlias("TWO", expression("2")))
-                       .withOutput("ORDERKEY").withOutput("TWO"));
+                output(ImmutableList.of("ORDERKEY", "TWO"),
+                        project(ImmutableMap.of("TWO", expression("2")),
+                                tableScan("lineitem").withAlias("ORDERKEY", lineitemOrderkeyColumn))));
     }
 
     @Test

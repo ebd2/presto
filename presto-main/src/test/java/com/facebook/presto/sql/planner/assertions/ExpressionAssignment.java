@@ -36,10 +36,12 @@ public class ExpressionAssignment
     implements HackMatcher
 {
     private final SqlParser parser = new SqlParser();
+    private final String sql;
     private final Expression expression;
 
     public ExpressionAssignment(String expression)
     {
+        this.sql = requireNonNull(expression);
         this.expression = expression(requireNonNull(expression));
     }
 
@@ -72,5 +74,11 @@ public class ExpressionAssignment
         checkState(matches.size() < 2, "Ambiguous expression %s matches multiple assignments", expression,
                 Joiner.on(", ").join((matches.stream().map(Expression::toString).collect(Collectors.toList()))));
         return result;
+    }
+
+    @Override
+    public String toString()
+    {
+        return sql;
     }
 }

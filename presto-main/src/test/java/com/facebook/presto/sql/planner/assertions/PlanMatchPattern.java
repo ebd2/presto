@@ -17,10 +17,12 @@ import com.facebook.presto.Session;
 import com.facebook.presto.metadata.Metadata;
 import com.facebook.presto.spi.predicate.Domain;
 import com.facebook.presto.sql.parser.SqlParser;
+import com.facebook.presto.sql.planner.Plan;
 import com.facebook.presto.sql.planner.Symbol;
 import com.facebook.presto.sql.planner.plan.ApplyNode;
 import com.facebook.presto.sql.planner.plan.FilterNode;
 import com.facebook.presto.sql.planner.plan.JoinNode;
+import com.facebook.presto.sql.planner.plan.OutputNode;
 import com.facebook.presto.sql.planner.plan.PlanNode;
 import com.facebook.presto.sql.planner.plan.ProjectNode;
 import com.facebook.presto.sql.planner.plan.SemiJoinNode;
@@ -89,6 +91,18 @@ public final class PlanMatchPattern
         return node(TableScanNode.class).with(new TableScanMatcher(expectedTableName, constraint));
     }
 
+    public static PlanMatchPattern output(PlanMatchPattern source)
+    {
+        return node(OutputNode.class, source);
+    }
+
+    public static PlanMatchPattern output(List<String> outputs, PlanMatchPattern source)
+    {
+        PlanMatchPattern result = output(source);
+        outputs.stream().map(result::withOutput);
+        return result;
+    }
+
     public static PlanMatchPattern window(WindowNode.Specification specification, List<FunctionCall> functionCalls, PlanMatchPattern source)
     {
         return any(source).with(new WindowMatcher(specification, functionCalls));
@@ -97,6 +111,15 @@ public final class PlanMatchPattern
     public static PlanMatchPattern project(PlanMatchPattern source)
     {
         return node(ProjectNode.class, source);
+    }
+
+    public static PlanMatchPattern project(Map<String, ExpressionAssignment> assignments, PlanMatchPattern source)
+    {
+        PlanMatchPattern result = project(source);
+        for (Map.Entry<String, ExpressionAssignment> assignment : assignments.entrySet()) {
+            result.withAlias(assignment.getKey(), assignment.getValue());
+        }
+        return result;
     }
 
     public static PlanMatchPattern semiJoin(String sourceSymbolAlias, String filteringSymbolAlias, String outputAlias, PlanMatchPattern source, PlanMatchPattern filtering)
@@ -304,7 +327,7 @@ public final class PlanMatchPattern
         return new ColumnReference(tableName, columnName);
     }
 
-    public static HackMatcher expression(String expression)
+    public static ExpressionAssignment expression(String expression)
     {
         return new ExpressionAssignment(expression);
     }
