@@ -81,7 +81,7 @@ public class TestPlanDsl
     {
         assertPlan("SELECT orderkey FROM lineitem",
                 node(OutputNode.class,
-                        tableScan("lineitem").withAlias("ORDERKEY", lineitemOrderkeyColumn))
+                        tableScan("lineitem", ImmutableMap.of("ORDERKEY", "orderkey")))
                 .withOutput("ORDERKEY"));
     }
 

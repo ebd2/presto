@@ -14,7 +14,6 @@
 package com.facebook.presto.sql.planner;
 
 import com.facebook.presto.spi.predicate.Domain;
-import com.facebook.presto.sql.planner.assertions.HackMatcher;
 import com.facebook.presto.sql.planner.assertions.PlanAssert;
 import com.facebook.presto.sql.planner.assertions.PlanMatchPattern;
 import com.facebook.presto.sql.planner.plan.ApplyNode;
@@ -39,7 +38,7 @@ import static com.facebook.presto.spi.type.VarcharType.createVarcharType;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.any;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.anyTree;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.apply;
-import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.columnReference;
+import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.constrainedTableScan;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.equiJoinClause;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.filter;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.join;
@@ -59,9 +58,6 @@ public class TestLogicalPlanner
 {
     private final LocalQueryRunner queryRunner;
 
-    private final HackMatcher ordersOrderkeyColumn;
-    private final HackMatcher lineitemOrderkeyColumn;
-
     public TestLogicalPlanner()
     {
         this.queryRunner = new LocalQueryRunner(testSessionBuilder()
@@ -72,9 +68,6 @@ public class TestLogicalPlanner
         queryRunner.createCatalog(queryRunner.getDefaultSession().getCatalog().get(),
                 new TpchConnectorFactory(1),
                 ImmutableMap.<String, String>of());
-
-        this.ordersOrderkeyColumn = columnReference("orders", "orderkey");
-        this.lineitemOrderkeyColumn = columnReference("lineitem", "orderkey");
     }
 
     @Test
@@ -84,9 +77,9 @@ public class TestLogicalPlanner
                 anyTree(
                         join(INNER, ImmutableList.of(equiJoinClause("ORDERS_OK", "LINEITEM_OK")),
                                 any(
-                                        tableScan("orders").withAlias("ORDERS_OK", ordersOrderkeyColumn)),
+                                        tableScan("orders", ImmutableMap.of("ORDERS_OK", "orderkey"))),
                                 anyTree(
-                                        tableScan("lineitem").withAlias("LINEITEM_OK", lineitemOrderkeyColumn)))));
+                                        tableScan("lineitem", ImmutableMap.of("LINEITEM_OK", "orderkey"))))));
     }
 
     @Test
@@ -96,11 +89,11 @@ public class TestLogicalPlanner
                 anyTree(
                         join(INNER, ImmutableList.of(equiJoinClause("X", "Y")),
                                 project(
-                                        tableScan("orders").withAlias("X", ordersOrderkeyColumn)),
+                                        tableScan("orders", ImmutableMap.of("X", "orderkey"))),
                                 project(
                                         node(EnforceSingleRowNode.class,
                                                 anyTree(
-                                                        tableScan("lineitem").withAlias("Y", lineitemOrderkeyColumn)))))));
+                                                        tableScan("lineitem", ImmutableMap.of("Y", "orderkey"))))))));
 
         assertPlan("SELECT * FROM orders WHERE orderkey IN (SELECT orderkey FROM lineitem WHERE linenumber % 4 = 0)",
                 anyTree(
@@ -108,9 +101,9 @@ public class TestLogicalPlanner
                                 project(
                                         semiJoin("X", "Y", "S",
                                                 anyTree(
-                                                        tableScan("orders").withAlias("X", ordersOrderkeyColumn)),
+                                                        tableScan("orders", ImmutableMap.of("X", "orderkey"))),
                                                 anyTree(
-                                                        tableScan("lineitem").withAlias("Y", lineitemOrderkeyColumn)))))));
+                                                        tableScan("lineitem", ImmutableMap.of("Y", "orderkey"))))))));
 
         assertPlan("SELECT * FROM orders WHERE orderkey NOT IN (SELECT orderkey FROM lineitem WHERE linenumber < 0)",
                 anyTree(
@@ -118,9 +111,9 @@ public class TestLogicalPlanner
                                 project(
                                         semiJoin("X", "Y", "S",
                                                 anyTree(
-                                                        tableScan("orders").withAlias("X", ordersOrderkeyColumn)),
+                                                        tableScan("orders", ImmutableMap.of("X", "orderkey"))),
                                                 anyTree(
-                                                        tableScan("lineitem").withAlias("Y", lineitemOrderkeyColumn)))))));
+                                                        tableScan("lineitem", ImmutableMap.of("Y", "orderkey"))))))));
     }
 
     @Test
@@ -136,13 +129,13 @@ public class TestLogicalPlanner
                 anyTree(
                         join(LEFT, ImmutableList.of(equiJoinClause("NATION_NAME", "REGION_NAME"), equiJoinClause("NATION_REGIONKEY", "REGION_REGIONKEY")),
                                 anyTree(
-                                        tableScan("nation", tableScanConstraint)
-                                                .withAlias("NATION_NAME", columnReference("nation", "name"))
-                                                .withAlias("NATION_REGIONKEY", columnReference("nation", "regionkey"))),
+                                        constrainedTableScan("nation", tableScanConstraint, ImmutableMap.of(
+                                                "NATION_NAME", "name",
+                                                "NATION_REGIONKEY", "regionkey"))),
                                 anyTree(
-                                        tableScan("region", tableScanConstraint)
-                                                .withAlias("REGION_NAME", columnReference("region", "name"))
-                                                .withAlias("REGION_REGIONKEY", columnReference("region", "regionkey"))))));
+                                        constrainedTableScan("region", tableScanConstraint, ImmutableMap.of(
+                                                "REGION_NAME", "name",
+                                                "REGION_REGIONKEY", "regionkey"))))));
     }
 
     @Test
@@ -205,7 +198,7 @@ public class TestLogicalPlanner
                 anyTree(
                         filter("3 = X",
                                 apply(ImmutableList.of("X"),
-                                        tableScan("orders").withAlias("X", ordersOrderkeyColumn),
+                                        tableScan("orders", ImmutableMap.of("X", "orderkey")),
                                         node(EnforceSingleRowNode.class,
                                                 project(
                                                         node(ValuesNode.class)
@@ -224,7 +217,7 @@ public class TestLogicalPlanner
                                                 tableScan("orders").withAlias("O", ordersOrderkeyColumn).withAlias("C", columnReference("orders", "custkey"))),
                                         anyTree(
                                                 apply(ImmutableList.of("L"),
-                                                        tableScan("lineitem").withAlias("L", lineitemOrderkeyColumn),
+                                                        tableScan("lineitem", ImmutableMap.of("L", lineitemOrderkeyColumn),
                                                         node(EnforceSingleRowNode.class,
                                                                 project(
                                                                         node(ValuesNode.class)

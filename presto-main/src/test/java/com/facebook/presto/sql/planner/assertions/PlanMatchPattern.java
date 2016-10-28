@@ -86,9 +86,29 @@ public final class PlanMatchPattern
         return node(TableScanNode.class).with(new TableScanMatcher(expectedTableName));
     }
 
-    public static PlanMatchPattern tableScan(String expectedTableName, Map<String, Domain> constraint)
+    public static PlanMatchPattern tableScan(String expectedTableName, Map<String, String> columnReferences)
+    {
+        PlanMatchPattern result = tableScan(expectedTableName);
+        return result.addColumnReferences(expectedTableName, columnReferences);
+    }
+
+    public static PlanMatchPattern constrainedTableScan(String expectedTableName, Map<String, Domain> constraint)
     {
         return node(TableScanNode.class).with(new TableScanMatcher(expectedTableName, constraint));
+    }
+
+    public static PlanMatchPattern constrainedTableScan(String expectedTableName, Map<String, Domain> constraint, Map<String, String> columnReferences)
+    {
+        PlanMatchPattern result = constrainedTableScan(expectedTableName, constraint);
+        return result.addColumnReferences(expectedTableName, columnReferences);
+    }
+
+    private PlanMatchPattern addColumnReferences(String expectedTableName, Map<String, String> columnReferences)
+    {
+        for (Map.Entry<String, String> reference : columnReferences.entrySet()) {
+            withAlias(reference.getKey(), columnReference(expectedTableName, reference.getValue()));
+        }
+        return this;
     }
 
     public static PlanMatchPattern output(PlanMatchPattern source)
