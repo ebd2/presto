@@ -14,6 +14,7 @@
 package com.facebook.presto.sql.planner.assertions;
 
 import com.facebook.presto.sql.tree.AstVisitor;
+import com.facebook.presto.sql.tree.BooleanLiteral;
 import com.facebook.presto.sql.tree.ComparisonExpression;
 import com.facebook.presto.sql.tree.Expression;
 import com.facebook.presto.sql.tree.GenericLiteral;
@@ -123,10 +124,19 @@ final class ExpressionVerifier
         return getValueFromLiteral(actual).equals(getValueFromLiteral(expected));
     }
 
+    @Override
+    protected Boolean visitBooleanLiteral(BooleanLiteral actual, Expression expected)
+    {
+        return getValueFromLiteral(actual).equals(getValueFromLiteral(expected));
+    }
+
     private String getValueFromLiteral(Expression expression)
     {
         if (expression instanceof LongLiteral) {
             return String.valueOf(((LongLiteral) expression).getValue());
+        }
+        else if (expression instanceof BooleanLiteral) {
+            return String.valueOf(((BooleanLiteral) expression).getValue());
         }
         else if (expression instanceof GenericLiteral) {
             return ((GenericLiteral) expression).getValue();
