@@ -43,6 +43,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
 
+import static com.facebook.presto.sql.ExpressionUtils.rewriteQualifiedNamesToSymbolReferences;
 import static com.facebook.presto.util.ImmutableCollectors.toImmutableList;
 import static com.google.common.base.Preconditions.checkState;
 import static java.util.Collections.nCopies;
@@ -244,7 +245,7 @@ public final class PlanMatchPattern
 
     public static PlanMatchPattern filter(String predicate, PlanMatchPattern source)
     {
-        Expression expectedPredicate = new SqlParser().createExpression(predicate);
+        Expression expectedPredicate = rewriteQualifiedNamesToSymbolReferences(new SqlParser().createExpression(predicate));
         return node(FilterNode.class, source).with(new FilterMatcher(expectedPredicate));
     }
 

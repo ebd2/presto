@@ -77,6 +77,9 @@ final class PlanMatchingVisitor
             for (PlanNode source : node.getSources()) {
                 PlanMatchingContext sourceContext = state.createContext(i++);
                 sourcesMatch = sourcesMatch && source.accept(this, sourceContext);
+                if (!sourcesMatch) {
+                    break;
+                }
                 stateAliases.putSourceAliases(sourceContext.getExpressionAliases());
             }
             if (sourcesMatch && context.getPattern().upMatches(node, session, metadata, stateAliases)) {

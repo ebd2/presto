@@ -17,6 +17,7 @@ import com.facebook.presto.sql.tree.AstVisitor;
 import com.facebook.presto.sql.tree.ComparisonExpression;
 import com.facebook.presto.sql.tree.Expression;
 import com.facebook.presto.sql.tree.GenericLiteral;
+import com.facebook.presto.sql.tree.InListExpression;
 import com.facebook.presto.sql.tree.InPredicate;
 import com.facebook.presto.sql.tree.LogicalBinaryExpression;
 import com.facebook.presto.sql.tree.LongLiteral;
@@ -26,6 +27,9 @@ import com.facebook.presto.sql.tree.QualifiedNameReference;
 import com.facebook.presto.sql.tree.StringLiteral;
 import com.facebook.presto.sql.tree.SymbolReference;
 
+import java.util.List;
+
+import static com.google.common.base.Preconditions.checkState;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 
@@ -74,7 +78,24 @@ final class ExpressionVerifier
     {
         if (expectedExpression instanceof InPredicate) {
             InPredicate expected = (InPredicate) expectedExpression;
-            return process(actual.getValue(), expected.getValue()) && process(actual.getValueList(), expected.getValueList());
+
+            if (actual.getValueList() instanceof InListExpression) {
+                return process(actual.getValue(), expected.getValue()) && process(actual.getValueList(), expected.getValueList());
+            }
+            else {
+                if (expected.getValueList() instanceof InListExpression) {
+                    /*
+                     * If the expected value is a value list, but the actual is e.g. a SymbolReference,
+                     * we need to unpack the value from the list so that when we hit visitSymbolReference, the
+                     * expected.toString() call returns something that the expressionAliases actually contains.
+                     * For example, InListExpression.toList returns "(onlyitem)" rather than "onlyitem".
+                     */
+                    List<Expression> values = ((InListExpression) expected.getValueList()).getValues();
+                    checkState(values.size() == 1, "Multiple expressions in expected value list %s, but actual value is not a list", values, actual.getValue());
+                    Expression onlyExpectedExpression = values.get(0);
+                    return process(actual.getValue(), expected.getValue()) && process(actual.getValueList(), onlyExpectedExpression);
+                }
+            }
         }
         return false;
     }
@@ -155,15 +176,10 @@ final class ExpressionVerifier
         return expressionAliases.get(expected.toString()).equals(actual);
     }
 
-    /*
-     * Sometimes the parser is a little hazy about the type that an alias is when we parse the expected expression
-     * and it incorrectly picks QualifiedNameReference when the type should actually be a symbol reference.
-     * Since we're just going to toString() it anyway, this isn't a problem.
-     */
     @Override
     protected Boolean visitSymbolReference(SymbolReference actual, Expression expected)
     {
-        if (!(expected instanceof SymbolReference || expected instanceof QualifiedNameReference)) {
+        if (!(expected instanceof SymbolReference)) {
             return false;
         }
         return expressionAliases.get(expected.toString()).equals(actual);

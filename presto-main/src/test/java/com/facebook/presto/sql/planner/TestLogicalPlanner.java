@@ -40,6 +40,7 @@ import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.anyTre
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.apply;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.constrainedTableScan;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.equiJoinClause;
+import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.expression;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.filter;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.join;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.node;
@@ -203,26 +204,29 @@ public class TestLogicalPlanner
                                                 project(
                                                         node(ValuesNode.class)
                                                 ))))));
+    }
 
-        /*
-        // double nesting
+    @Test
+    public void testDoubleNestedCorrelatedSubqueries()
+    {
         assertPlan(
                 "SELECT orderkey FROM orders o " +
                         "WHERE 3 IN (SELECT o.custkey FROM lineitem l WHERE (SELECT l.orderkey = o.orderkey))",
                 LogicalPlanner.Stage.OPTIMIZED,
                 anyTree(
-                        filter("3 IN (C)",
+                        filter("THREE IN (C)",
                                 apply(ImmutableList.of("C", "O"),
-                                        project(
-                                                tableScan("orders").withAlias("O", ordersOrderkeyColumn).withAlias("C", columnReference("orders", "custkey"))),
+                                        project(ImmutableMap.of("THREE", expression("3")),
+                                                tableScan("orders", ImmutableMap.of(
+                                                        "O", "orderkey",
+                                                        "C", "custkey"))),
                                         anyTree(
                                                 apply(ImmutableList.of("L"),
-                                                        tableScan("lineitem", ImmutableMap.of("L", lineitemOrderkeyColumn),
+                                                        tableScan("lineitem", ImmutableMap.of("L", "orderkey")),
                                                         node(EnforceSingleRowNode.class,
                                                                 project(
                                                                         node(ValuesNode.class)
                                                                 ))))))));
-        */
     }
 
     /*
