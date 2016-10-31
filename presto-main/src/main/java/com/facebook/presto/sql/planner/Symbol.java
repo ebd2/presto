@@ -47,13 +47,13 @@ public class Symbol
 
     public SymbolReference toSymbolReference()
     {
-        return new SymbolReference(name);
+        return new SymbolReference(getName());
     }
 
     @Override
     public String toString()
     {
-        return name;
+        return getName();
     }
 
     @Override

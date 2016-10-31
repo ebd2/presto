@@ -15,9 +15,13 @@ package com.facebook.presto.sql.planner.assertions;
 
 import com.facebook.presto.Session;
 import com.facebook.presto.metadata.Metadata;
+import com.facebook.presto.sql.planner.Symbol;
+import com.facebook.presto.sql.planner.plan.ExchangeNode;
 import com.facebook.presto.sql.planner.plan.PlanNode;
 import com.facebook.presto.sql.planner.plan.PlanVisitor;
 import com.facebook.presto.sql.planner.plan.ProjectNode;
+import com.facebook.presto.sql.tree.Expression;
+import com.google.common.collect.ImmutableMap;
 
 import java.util.List;
 
@@ -39,10 +43,37 @@ final class PlanMatchingVisitor
     }
 
     @Override
+    public Boolean visitExchange(ExchangeNode node, PlanMatchingContext context)
+    {
+        checkState(node.getType() == ExchangeNode.Type.GATHER, "Only GATHER is supported");
+        List<List<Symbol>> allInputs = node.getInputs();
+        checkState(allInputs.size() == 1, "I don't know what to do with all these inputs");
+
+        List<Symbol> inputs = allInputs.get(0);
+        List<Symbol> outputs = node.getOutputSymbols();
+
+        checkState(inputs.size() == outputs.size(), "Inputs/outputs size mismatch");
+
+        ImmutableMap.Builder<Symbol, Expression> assignments = ImmutableMap.builder();
+        for (int i = 0; i < inputs.size(); ++i) {
+            assignments.put(outputs.get(i), inputs.get(i).toSymbolReference());
+        }
+
+        boolean result = super.visitExchange(node, context);
+        if (result) {
+            context.getExpressionAliases().updateAssignments(assignments.build());
+        }
+        return result;
+    }
+
+    @Override
     public Boolean visitProject(ProjectNode node, PlanMatchingContext context)
     {
-        context.getExpressionAliases().updateAssignments(node.getAssignments());
-        return super.visitProject(node, context);
+        boolean result = super.visitProject(node, context);
+        if (result) {
+            context.getExpressionAliases().updateAssignments(node.getAssignments());
+        }
+        return result;
     }
 
     @Override

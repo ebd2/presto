@@ -24,15 +24,18 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import org.testng.annotations.Test;
 
+import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.aggregate;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.any;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.anyTree;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.columnReference;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.equiJoinClause;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.expression;
+import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.functionCall;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.join;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.node;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.output;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.project;
+import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.symbol;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.tableScan;
 import static com.facebook.presto.sql.planner.plan.JoinNode.Type.INNER;
 import static com.facebook.presto.testing.TestingSession.testSessionBuilder;
@@ -94,6 +97,17 @@ public class TestPlanDsl
                                         tableScan("orders").withAlias("ORDERS_OK", columnReference("orders", "orderkey"))),
                                 anyTree(
                                         tableScan("lineitem").withAlias("LINEITEM_OK", columnReference("lineitem", "orderkey"))))));
+    }
+
+    @Test
+    public void testAggregation()
+    {
+        assertPlan("SELECT COUNT(nationkey) FROM nation",
+                output(ImmutableList.of("FINAL_COUNT"),
+                        aggregate(ImmutableMap.of("FINAL_COUNT", functionCall("count", symbol("PARTIAL_COUNT"))),
+                                any(
+                                        aggregate(ImmutableMap.of("PARTIAL_COUNT", functionCall("count", symbol("NATIONKEY"))),
+                                                tableScan("nation", ImmutableMap.of("NATIONKEY", "nationkey")))))));
     }
 
     @Test(expectedExceptions = { NullPointerException.class })

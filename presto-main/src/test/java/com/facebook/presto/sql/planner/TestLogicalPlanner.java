@@ -35,6 +35,7 @@ import java.util.function.Predicate;
 
 import static com.facebook.presto.spi.predicate.Domain.singleValue;
 import static com.facebook.presto.spi.type.VarcharType.createVarcharType;
+import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.aggregate;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.any;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.anyTree;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.apply;
@@ -42,10 +43,12 @@ import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.constr
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.equiJoinClause;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.expression;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.filter;
+import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.functionCall;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.join;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.node;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.project;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.semiJoin;
+import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.symbol;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.tableScan;
 import static com.facebook.presto.sql.planner.plan.JoinNode.Type.INNER;
 import static com.facebook.presto.sql.planner.plan.JoinNode.Type.LEFT;
@@ -229,25 +232,24 @@ public class TestLogicalPlanner
                                                                 ))))))));
     }
 
-    /*
     @Test
     public void testCorrelatedScalarAggregationRewriteToLeftOuterJoin()
     {
         assertPlan(
                 "SELECT orderkey FROM orders WHERE EXISTS(SELECT 1 WHERE orderkey = 3)", // EXISTS maps to count(*) = 1
-                anyTree(
-                        filter("count > 0",
-                                anyTree(
-                                        node(AggregationNode.class,
-                                                anyTree(
-                                                        join(LEFT, ImmutableList.of(),
-                                                                anyTree(
-                                                                        tableScan("orders")),
-                                                                anyTree(
-                                                                        node(ValuesNode.class)
-                                                                ))))))));
+                any(any(
+                        filter("FINAL_COUNT > 0",
+                                any(
+                                        aggregate(ImmutableMap.of("FINAL_COUNT", functionCall("count", symbol("PARTIAL_COUNT"))),
+                                                any(
+                                                        aggregate(ImmutableMap.of("PARTIAL_COUNT", functionCall("count", symbol("NON_NULL"))),
+                                                                any(
+                                                                        join(LEFT, ImmutableList.of(),
+                                                                                any(
+                                                                                        tableScan("orders")),
+                                                                                project(ImmutableMap.of("NON_NULL", expression("true")),
+                                                                                        node(ValuesNode.class))))))))))));
     }
-    */
 
     private void assertPlan(String sql, PlanMatchPattern pattern)
     {

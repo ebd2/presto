@@ -18,6 +18,7 @@ import com.facebook.presto.metadata.Metadata;
 import com.facebook.presto.spi.predicate.Domain;
 import com.facebook.presto.sql.parser.SqlParser;
 import com.facebook.presto.sql.planner.Symbol;
+import com.facebook.presto.sql.planner.plan.AggregationNode;
 import com.facebook.presto.sql.planner.plan.ApplyNode;
 import com.facebook.presto.sql.planner.plan.FilterNode;
 import com.facebook.presto.sql.planner.plan.JoinNode;
@@ -111,6 +112,15 @@ public final class PlanMatchPattern
         return this;
     }
 
+    public static PlanMatchPattern aggregate(Map<String, FunctionCallMaker> assignments, PlanMatchPattern source)
+    {
+        PlanMatchPattern result = node(AggregationNode.class, source);
+        for (Map.Entry<String, FunctionCallMaker> assignment : assignments.entrySet()) {
+            result.withAlias(assignment.getKey(), new AggregationFunctionMatcher(assignment.getValue()));
+        }
+        return result;
+    }
+
     public static PlanMatchPattern output(PlanMatchPattern source)
     {
         return node(OutputNode.class, source);
@@ -119,7 +129,9 @@ public final class PlanMatchPattern
     public static PlanMatchPattern output(List<String> outputs, PlanMatchPattern source)
     {
         PlanMatchPattern result = output(source);
-        outputs.stream().map(result::withOutput);
+        for (String output : outputs) {
+            result.withOutput(output);
+        }
         return result;
     }
 
@@ -225,6 +237,28 @@ public final class PlanMatchPattern
         public JoinNode.EquiJoinClause rehydrate(ExpressionAliases aliases)
         {
             return new JoinNode.EquiJoinClause(left.toSymbol(aliases), right.toSymbol(aliases));
+        }
+    }
+
+    static class FunctionCallMaker
+    {
+        QualifiedName name;
+        List<MagicSymbol> args;
+
+        public FunctionCallMaker(QualifiedName name, List<MagicSymbol> args)
+        {
+            this.name = requireNonNull(name, "name is null");
+            this.args = requireNonNull(args, "args is null");
+        }
+
+        public FunctionCall rehydrate(ExpressionAliases aliases)
+        {
+            List<Expression> symbolArgs = args
+                    .stream()
+                    .map(arg -> arg.toSymbol(aliases).toSymbolReference())
+                    .collect(toImmutableList());
+
+            return new FunctionCall(name, symbolArgs);
         }
     }
 
@@ -378,6 +412,11 @@ public final class PlanMatchPattern
     public static FunctionCall functionCall(String name, Optional<WindowFrame> frame, SymbolReference... args)
     {
         return new RelaxedEqualityFunctionCall(QualifiedName.of(name), Arrays.asList(args), frame);
+    }
+
+    public static FunctionCallMaker functionCall(String name, MagicSymbol... args)
+    {
+        return new FunctionCallMaker(QualifiedName.of(name), Arrays.asList(args));
     }
 
     @Override
