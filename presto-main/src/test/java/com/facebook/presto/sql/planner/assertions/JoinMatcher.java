@@ -18,43 +18,59 @@ import com.facebook.presto.Session;
 import com.facebook.presto.metadata.Metadata;
 import com.facebook.presto.sql.planner.plan.JoinNode;
 import com.facebook.presto.sql.planner.plan.PlanNode;
+import com.google.common.collect.ImmutableSet;
 
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static com.google.common.base.MoreObjects.toStringHelper;
+import static com.google.common.base.Preconditions.checkState;
 import static java.util.Objects.requireNonNull;
 
 final class JoinMatcher
         implements Matcher
 {
     private final JoinNode.Type joinType;
-    private final List<AliasPair> equiCriteria;
+    private final List<PlanMatchPattern.EquiMaker> equiCriteria;
 
-    JoinMatcher(JoinNode.Type joinType, List<AliasPair> equiCriteria)
+    JoinMatcher(JoinNode.Type joinType, List<PlanMatchPattern.EquiMaker> equiCriteria)
     {
         this.joinType = requireNonNull(joinType, "joinType is null");
         this.equiCriteria = requireNonNull(equiCriteria, "equiCriteria is null");
     }
 
     @Override
-    public boolean matches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
+    public boolean downMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
     {
-        if (node instanceof JoinNode) {
-            JoinNode joinNode = (JoinNode) node;
-            if (joinNode.getType() != joinType) {
-                return false;
-            }
-            if (joinNode.getCriteria().size() == equiCriteria.size()) {
-                int i = 0;
-                for (JoinNode.EquiJoinClause equiJoinClause : joinNode.getCriteria()) {
-                    AliasPair expectedEquiClause = equiCriteria.get(i++);
-                    expressionAliases.put(expectedEquiClause.left, equiJoinClause.getLeft().toSymbolReference());
-                    expressionAliases.put(expectedEquiClause.right, equiJoinClause.getRight().toSymbolReference());
-                }
-                return true;
-            }
+        return node instanceof JoinNode;
+    }
+
+    @Override
+    public boolean upMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
+    {
+        checkState(downMatches(node, session, metadata, expressionAliases));
+
+        JoinNode joinNode = (JoinNode) node;
+        if (joinNode.getType() != joinType) {
+            return false;
         }
-        return false;
+
+        if (joinNode.getCriteria().size() != equiCriteria.size()) {
+            return false;
+        }
+
+        /*
+         * Have to use order-independent comparison; there are no guarantees what order
+         * the equi criteria will have after planning and optimizing.
+         */
+        Set<JoinNode.EquiJoinClause> actual = ImmutableSet.copyOf(joinNode.getCriteria());
+        Set<JoinNode.EquiJoinClause> expected =
+                ImmutableSet.copyOf(equiCriteria.stream()
+                .map(maker -> maker.rehydrate(expressionAliases))
+                .collect(Collectors.toSet()));
+
+        return expected.equals(actual);
     }
 
     @Override

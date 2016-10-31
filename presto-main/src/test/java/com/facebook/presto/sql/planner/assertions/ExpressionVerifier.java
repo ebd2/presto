@@ -14,9 +14,11 @@
 package com.facebook.presto.sql.planner.assertions;
 
 import com.facebook.presto.sql.tree.AstVisitor;
+import com.facebook.presto.sql.tree.BooleanLiteral;
 import com.facebook.presto.sql.tree.ComparisonExpression;
 import com.facebook.presto.sql.tree.Expression;
 import com.facebook.presto.sql.tree.GenericLiteral;
+import com.facebook.presto.sql.tree.InListExpression;
 import com.facebook.presto.sql.tree.InPredicate;
 import com.facebook.presto.sql.tree.LogicalBinaryExpression;
 import com.facebook.presto.sql.tree.LongLiteral;
@@ -26,6 +28,9 @@ import com.facebook.presto.sql.tree.QualifiedNameReference;
 import com.facebook.presto.sql.tree.StringLiteral;
 import com.facebook.presto.sql.tree.SymbolReference;
 
+import java.util.List;
+
+import static com.google.common.base.Preconditions.checkState;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 
@@ -74,7 +79,24 @@ final class ExpressionVerifier
     {
         if (expectedExpression instanceof InPredicate) {
             InPredicate expected = (InPredicate) expectedExpression;
-            return process(actual.getValue(), expected.getValue()) && process(actual.getValueList(), expected.getValueList());
+
+            if (actual.getValueList() instanceof InListExpression) {
+                return process(actual.getValue(), expected.getValue()) && process(actual.getValueList(), expected.getValueList());
+            }
+            else {
+                if (expected.getValueList() instanceof InListExpression) {
+                    /*
+                     * If the expected value is a value list, but the actual is e.g. a SymbolReference,
+                     * we need to unpack the value from the list so that when we hit visitSymbolReference, the
+                     * expected.toString() call returns something that the expressionAliases actually contains.
+                     * For example, InListExpression.toList returns "(onlyitem)" rather than "onlyitem".
+                     */
+                    List<Expression> values = ((InListExpression) expected.getValueList()).getValues();
+                    checkState(values.size() == 1, "Multiple expressions in expected value list %s, but actual value is not a list", values, actual.getValue());
+                    Expression onlyExpectedExpression = values.get(0);
+                    return process(actual.getValue(), expected.getValue()) && process(actual.getValueList(), onlyExpectedExpression);
+                }
+            }
         }
         return false;
     }
@@ -102,10 +124,19 @@ final class ExpressionVerifier
         return getValueFromLiteral(actual).equals(getValueFromLiteral(expected));
     }
 
+    @Override
+    protected Boolean visitBooleanLiteral(BooleanLiteral actual, Expression expected)
+    {
+        return getValueFromLiteral(actual).equals(getValueFromLiteral(expected));
+    }
+
     private String getValueFromLiteral(Expression expression)
     {
         if (expression instanceof LongLiteral) {
             return String.valueOf(((LongLiteral) expression).getValue());
+        }
+        else if (expression instanceof BooleanLiteral) {
+            return String.valueOf(((BooleanLiteral) expression).getValue());
         }
         else if (expression instanceof GenericLiteral) {
             return ((GenericLiteral) expression).getValue();
@@ -149,14 +180,18 @@ final class ExpressionVerifier
     @Override
     protected Boolean visitQualifiedNameReference(QualifiedNameReference actual, Expression expected)
     {
-        expressionAliases.put(expected.toString(), actual);
-        return true;
+        if (!(expected instanceof QualifiedNameReference)) {
+            return false;
+        }
+        return expressionAliases.get(expected.toString()).equals(actual);
     }
 
     @Override
     protected Boolean visitSymbolReference(SymbolReference actual, Expression expected)
     {
-        expressionAliases.put(expected.toString(), actual);
-        return true;
+        if (!(expected instanceof SymbolReference)) {
+            return false;
+        }
+        return expressionAliases.get(expected.toString()).equals(actual);
     }
 }

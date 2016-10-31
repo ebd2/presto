@@ -18,30 +18,34 @@ import com.facebook.presto.metadata.Metadata;
 import com.facebook.presto.sql.planner.Symbol;
 import com.facebook.presto.sql.planner.plan.PlanNode;
 
-import java.util.regex.Pattern;
-
 import static com.google.common.base.MoreObjects.toStringHelper;
 import static com.google.common.base.Preconditions.checkState;
 
 final class SymbolMatcher
         implements Matcher
 {
-    private final Pattern pattern;
+    private final Symbol expectedSymbol;
     private final String alias;
 
-    SymbolMatcher(String pattern, String alias)
+    SymbolMatcher(Symbol expectedSymbol, String alias)
     {
-        this.pattern = Pattern.compile(pattern);
+        this.expectedSymbol = expectedSymbol;
         this.alias = alias;
     }
 
     @Override
-    public boolean matches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
+    public boolean downMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
+    {
+        return true;
+    }
+
+    @Override
+    public boolean upMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
     {
         Symbol symbol = null;
         for (Symbol outputSymbol : node.getOutputSymbols()) {
-            if (pattern.matcher(outputSymbol.getName()).find()) {
-                checkState(symbol == null, "%s symbol was found multiple times in %s", pattern, node.getOutputSymbols());
+            if (expectedSymbol.equals(outputSymbol)) {
+                checkState(symbol == null, "%s symbol was found multiple times in %s", expectedSymbol.getName(), node.getOutputSymbols());
                 symbol = outputSymbol;
             }
         }
@@ -57,7 +61,7 @@ final class SymbolMatcher
     {
         return toStringHelper(this)
                 .add("alias", alias)
-                .add("pattern", pattern)
+                .add("name", expectedSymbol)
                 .toString();
     }
 }

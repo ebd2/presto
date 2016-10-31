@@ -11,51 +11,41 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.facebook.presto.sql.planner.assertions;
 
 import com.facebook.presto.Session;
 import com.facebook.presto.metadata.Metadata;
-import com.facebook.presto.sql.planner.plan.FilterNode;
+import com.facebook.presto.sql.planner.Symbol;
 import com.facebook.presto.sql.planner.plan.PlanNode;
 import com.facebook.presto.sql.tree.Expression;
 
-import static com.google.common.base.MoreObjects.toStringHelper;
 import static java.util.Objects.requireNonNull;
 
-final class FilterMatcher
-        implements Matcher
+public class OutputMatcher
+    implements Matcher
 {
-    private final Expression predicate;
+    private final String alias;
 
-    FilterMatcher(Expression predicate)
+    public OutputMatcher(String alias)
     {
-        this.predicate = requireNonNull(predicate, "predicate is null");
+        this.alias = requireNonNull(alias, "alias is null");
     }
 
     @Override
     public boolean downMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
     {
-        return node instanceof FilterNode;
+        return true;
     }
 
     @Override
     public boolean upMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
     {
-        if (node instanceof FilterNode) {
-            FilterNode filterNode = (FilterNode) node;
-            if (new ExpressionVerifier(expressionAliases).process(filterNode.getPredicate(), predicate)) {
+        Expression expression = expressionAliases.get(alias);
+        for (Symbol outputSymbol : node.getOutputSymbols()) {
+            if (expression.equals(outputSymbol.toSymbolReference())) {
                 return true;
             }
         }
         return false;
-    }
-
-    @Override
-    public String toString()
-    {
-        return toStringHelper(this)
-                .add("predicate", predicate)
-                .toString();
     }
 }

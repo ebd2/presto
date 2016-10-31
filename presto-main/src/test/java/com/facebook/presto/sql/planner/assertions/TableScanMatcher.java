@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static com.google.common.base.MoreObjects.toStringHelper;
+import static com.google.common.base.Preconditions.checkState;
 import static java.util.Objects.requireNonNull;
 
 final class TableScanMatcher
@@ -47,8 +48,15 @@ final class TableScanMatcher
     }
 
     @Override
-    public boolean matches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
+    public boolean downMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
     {
+        return node instanceof TableScanNode;
+    }
+
+    @Override
+    public boolean upMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
+    {
+        checkState(downMatches(node, session, metadata, expressionAliases));
         if (node instanceof TableScanNode) {
             TableScanNode tableScanNode = (TableScanNode) node;
             TableMetadata tableMetadata = metadata.getTableMetadata(session, tableScanNode.getTable());

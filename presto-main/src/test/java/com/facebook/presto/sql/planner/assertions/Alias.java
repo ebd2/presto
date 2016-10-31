@@ -11,51 +11,53 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.facebook.presto.sql.planner.assertions;
 
 import com.facebook.presto.Session;
 import com.facebook.presto.metadata.Metadata;
-import com.facebook.presto.sql.planner.plan.FilterNode;
+import com.facebook.presto.sql.planner.Symbol;
 import com.facebook.presto.sql.planner.plan.PlanNode;
-import com.facebook.presto.sql.tree.Expression;
 
-import static com.google.common.base.MoreObjects.toStringHelper;
+import java.util.Optional;
+
+import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 
-final class FilterMatcher
-        implements Matcher
+public class Alias
+    implements Matcher
 {
-    private final Expression predicate;
+    private final String alias;
+    private final HackMatcher matcher;
 
-    FilterMatcher(Expression predicate)
+    public Alias(String alias, HackMatcher matcher)
     {
-        this.predicate = requireNonNull(predicate, "predicate is null");
+        this.alias = requireNonNull(alias, "alias is null");
+        this.matcher = requireNonNull(matcher, "matcher is null");
     }
 
     @Override
     public boolean downMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
     {
-        return node instanceof FilterNode;
+        return true;
     }
 
+    /*
+     * Add aliases on the way back up the tree. Adding them on the way down would put them in the expressionAliases
+     * for matchers that run against the nodes sources, which would be incorrect.
+     */
     @Override
     public boolean upMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
     {
-        if (node instanceof FilterNode) {
-            FilterNode filterNode = (FilterNode) node;
-            if (new ExpressionVerifier(expressionAliases).process(filterNode.getPredicate(), predicate)) {
-                return true;
-            }
+        Optional<Symbol> symbol = matcher.getSymbol(node, session, metadata, expressionAliases);
+        if (symbol.isPresent()) {
+            expressionAliases.put(alias, symbol.get().toSymbolReference());
         }
-        return false;
+        return symbol.isPresent();
     }
 
     @Override
     public String toString()
     {
-        return toStringHelper(this)
-                .add("predicate", predicate)
-                .toString();
+        return format("%s -> %s", alias, matcher);
     }
 }

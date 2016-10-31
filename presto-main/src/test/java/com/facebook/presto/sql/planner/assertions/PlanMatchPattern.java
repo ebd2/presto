@@ -17,9 +17,12 @@ import com.facebook.presto.Session;
 import com.facebook.presto.metadata.Metadata;
 import com.facebook.presto.spi.predicate.Domain;
 import com.facebook.presto.sql.parser.SqlParser;
+import com.facebook.presto.sql.planner.Symbol;
+import com.facebook.presto.sql.planner.plan.AggregationNode;
 import com.facebook.presto.sql.planner.plan.ApplyNode;
 import com.facebook.presto.sql.planner.plan.FilterNode;
 import com.facebook.presto.sql.planner.plan.JoinNode;
+import com.facebook.presto.sql.planner.plan.OutputNode;
 import com.facebook.presto.sql.planner.plan.PlanNode;
 import com.facebook.presto.sql.planner.plan.ProjectNode;
 import com.facebook.presto.sql.planner.plan.SemiJoinNode;
@@ -29,16 +32,19 @@ import com.facebook.presto.sql.tree.Expression;
 import com.facebook.presto.sql.tree.FunctionCall;
 import com.facebook.presto.sql.tree.QualifiedName;
 import com.facebook.presto.sql.tree.SymbolReference;
-import com.facebook.presto.sql.tree.Window;
+import com.facebook.presto.sql.tree.WindowFrame;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Function;
 
+import static com.facebook.presto.sql.ExpressionUtils.rewriteQualifiedNamesToSymbolReferences;
 import static com.facebook.presto.util.ImmutableCollectors.toImmutableList;
 import static com.google.common.base.Preconditions.checkState;
 import static java.util.Collections.nCopies;
@@ -81,14 +87,57 @@ public final class PlanMatchPattern
         return node(TableScanNode.class).with(new TableScanMatcher(expectedTableName));
     }
 
-    public static PlanMatchPattern tableScan(String expectedTableName, Map<String, Domain> constraint)
+    public static PlanMatchPattern tableScan(String expectedTableName, Map<String, String> columnReferences)
+    {
+        PlanMatchPattern result = tableScan(expectedTableName);
+        return result.addColumnReferences(expectedTableName, columnReferences);
+    }
+
+    public static PlanMatchPattern constrainedTableScan(String expectedTableName, Map<String, Domain> constraint)
     {
         return node(TableScanNode.class).with(new TableScanMatcher(expectedTableName, constraint));
     }
 
-    public static PlanMatchPattern window(List<FunctionCall> functionCalls, PlanMatchPattern source)
+    public static PlanMatchPattern constrainedTableScan(String expectedTableName, Map<String, Domain> constraint, Map<String, String> columnReferences)
     {
-        return node(WindowNode.class, source).with(new WindowMatcher(functionCalls));
+        PlanMatchPattern result = constrainedTableScan(expectedTableName, constraint);
+        return result.addColumnReferences(expectedTableName, columnReferences);
+    }
+
+    private PlanMatchPattern addColumnReferences(String expectedTableName, Map<String, String> columnReferences)
+    {
+        for (Map.Entry<String, String> reference : columnReferences.entrySet()) {
+            withAlias(reference.getKey(), columnReference(expectedTableName, reference.getValue()));
+        }
+        return this;
+    }
+
+    public static PlanMatchPattern aggregate(Map<String, FunctionCallMaker> assignments, PlanMatchPattern source)
+    {
+        PlanMatchPattern result = node(AggregationNode.class, source);
+        for (Map.Entry<String, FunctionCallMaker> assignment : assignments.entrySet()) {
+            result.withAlias(assignment.getKey(), new AggregationFunctionMatcher(assignment.getValue()));
+        }
+        return result;
+    }
+
+    public static PlanMatchPattern output(PlanMatchPattern source)
+    {
+        return node(OutputNode.class, source);
+    }
+
+    public static PlanMatchPattern output(List<String> outputs, PlanMatchPattern source)
+    {
+        PlanMatchPattern result = output(source);
+        for (String output : outputs) {
+            result.withOutput(output);
+        }
+        return result;
+    }
+
+    public static PlanMatchPattern window(WindowNode.Specification specification, List<FunctionCall> functionCalls, PlanMatchPattern source)
+    {
+        return any(source).with(new WindowMatcher(specification, functionCalls));
     }
 
     public static PlanMatchPattern project(PlanMatchPattern source)
@@ -96,14 +145,131 @@ public final class PlanMatchPattern
         return node(ProjectNode.class, source);
     }
 
+    public static PlanMatchPattern project(Map<String, ExpressionAssignment> assignments, PlanMatchPattern source)
+    {
+        PlanMatchPattern result = project(source);
+        for (Map.Entry<String, ExpressionAssignment> assignment : assignments.entrySet()) {
+            result.withAlias(assignment.getKey(), assignment.getValue());
+        }
+        return result;
+    }
+
     public static PlanMatchPattern semiJoin(String sourceSymbolAlias, String filteringSymbolAlias, String outputAlias, PlanMatchPattern source, PlanMatchPattern filtering)
     {
         return node(SemiJoinNode.class, source, filtering).with(new SemiJoinMatcher(sourceSymbolAlias, filteringSymbolAlias, outputAlias));
     }
 
-    public static PlanMatchPattern join(JoinNode.Type joinType, List<AliasPair> expectedEquiCriteria, PlanMatchPattern left, PlanMatchPattern right)
+    public static PlanMatchPattern join(JoinNode.Type joinType, List<EquiMaker> expectedEquiCriteria, PlanMatchPattern left, PlanMatchPattern right)
     {
         return node(JoinNode.class, left, right).with(new JoinMatcher(joinType, expectedEquiCriteria));
+    }
+
+    public static class MagicSymbol
+    {
+        private final String alias;
+
+        public MagicSymbol(String alias)
+        {
+            this.alias = requireNonNull(alias, "alias is null");
+        }
+
+        public Symbol toSymbol(ExpressionAliases aliases)
+        {
+            return new AliasedSymbol(alias, aliases);
+        }
+
+        private static class AliasedSymbol
+                extends Symbol
+        {
+            private final String alias;
+            private final ExpressionAliases aliases;
+
+            private AliasedSymbol(String alias, ExpressionAliases aliases)
+            {
+                super(alias);
+                this.alias = requireNonNull(alias);
+                this.aliases = requireNonNull(aliases);
+            }
+
+            public String getName()
+            {
+                Expression value = aliases.get(alias);
+                checkState(value instanceof SymbolReference, "%s is not a SymbolReference", value);
+                SymbolReference reference = (SymbolReference) value;
+                return ((SymbolReference) value).getName();
+            }
+
+            @Override
+            public boolean equals(Object obj)
+            {
+                if (this == obj) {
+                    return true;
+                }
+
+                if (obj == null || !Symbol.class.equals(obj.getClass())) {
+                    return false;
+                }
+
+                Symbol other = (Symbol) obj;
+
+                return Objects.equals(getName(), other.getName());
+            }
+
+            @Override
+            public int hashCode()
+            {
+                return getName().hashCode();
+            }
+        }
+    }
+
+    static class EquiMaker
+    {
+        MagicSymbol left;
+        MagicSymbol right;
+
+        public EquiMaker(MagicSymbol left, MagicSymbol right)
+        {
+            this.left = requireNonNull(left);
+            this.right = requireNonNull(right);
+        }
+
+        public JoinNode.EquiJoinClause rehydrate(ExpressionAliases aliases)
+        {
+            return new JoinNode.EquiJoinClause(left.toSymbol(aliases), right.toSymbol(aliases));
+        }
+    }
+
+    static class FunctionCallMaker
+    {
+        QualifiedName name;
+        List<MagicSymbol> args;
+
+        public FunctionCallMaker(QualifiedName name, List<MagicSymbol> args)
+        {
+            this.name = requireNonNull(name, "name is null");
+            this.args = requireNonNull(args, "args is null");
+        }
+
+        public FunctionCall rehydrate(ExpressionAliases aliases)
+        {
+            List<Expression> symbolArgs = args
+                    .stream()
+                    .map(arg -> arg.toSymbol(aliases).toSymbolReference())
+                    .collect(toImmutableList());
+
+            return new FunctionCall(name, symbolArgs);
+        }
+    }
+
+    public static EquiMaker equiJoinClause(String left, String right)
+    {
+        return new EquiMaker(new MagicSymbol(left), new MagicSymbol(right));
+    }
+
+    public static MagicSymbol symbol(String alias)
+    {
+        return new MagicSymbol(alias);
     }
 
     public static AliasPair aliasPair(String left, String right)
@@ -113,7 +279,7 @@ public final class PlanMatchPattern
 
     public static PlanMatchPattern filter(String predicate, PlanMatchPattern source)
     {
-        Expression expectedPredicate = new SqlParser().createExpression(predicate);
+        Expression expectedPredicate = rewriteQualifiedNamesToSymbolReferences(new SqlParser().createExpression(predicate));
         return node(FilterNode.class, source).with(new FilterMatcher(expectedPredicate));
     }
 
@@ -129,7 +295,7 @@ public final class PlanMatchPattern
         this.sourcePatterns = ImmutableList.copyOf(sourcePatterns);
     }
 
-    List<PlanMatchingState> matches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
+    List<PlanMatchingState> downMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
     {
         ImmutableList.Builder<PlanMatchingState> states = ImmutableList.builder();
         if (anyTree) {
@@ -141,20 +307,88 @@ public final class PlanMatchPattern
                 states.add(new PlanMatchingState(ImmutableList.of(this), expressionAliases));
             }
         }
-        if (node.getSources().size() == sourcePatterns.size() && matchers.stream().allMatch(it -> it.matches(node, session, metadata, expressionAliases))) {
+        if (node.getSources().size() == sourcePatterns.size() && matchers.stream().allMatch(it -> it.downMatches(node, session, metadata, expressionAliases))) {
             states.add(new PlanMatchingState(sourcePatterns, expressionAliases));
         }
         return states.build();
     }
 
-    public PlanMatchPattern withSymbol(String pattern, String alias)
+    boolean upMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
     {
-        return with(new SymbolMatcher(pattern, alias));
+        return matchers.stream().allMatch(it -> it.upMatches(node, session, metadata, expressionAliases));
+    }
+
+    /*
+     * When should I use this? When should I use symbolStem by itself?
+     *
+     * withSymbol is useful if you need to verify that a Symbol in one PlanNode
+     * is exactly the same as the Symbol in another PlanNode. withSymbol
+     * registers an alias for the expectedSymbol so that that exact symbol can
+     * be referenced in another part of the tree.
+     *
+     * This is likely to be most useful if you use symbolStem for the
+     * expectedSymbol, because symbolStem returns a symbol that compares equal
+     * to a symbol that has the same stem, but has been uniquified by the
+     * SymbolAllocator. For example symbolStem("orderkey").equals(new
+     * Symbol("orderkey_729")) returns true.
+     *
+     * The most clear case where this is useful is in testing plans that include
+     * a join where the plan has the form
+     *
+     * OuputNode
+     * `--...
+     *    `--JoinNode orderkey = orderkey
+     *       `--TableScanNode table = tpch.orders, outputs = orderkey
+     *       `--TableScanNode table = tpch.lineitem, outputs = orderkey
+     *
+     * In this case, it's important not only that the join criteria is orderkey
+     * = orderkey, but also that the original source of each of the orderkeys
+     * in the expression is the tables we expect it to be. Note that depending
+     * on the rest of the plan, one or both orderkey symbols may be uniquified,
+     * necessitating the use of symbolStem.
+     *
+     * For tests where you want to assert something about a Symbol in a single
+     * node (e.g. a WindowNode.Specification has a certain partition key), it's
+     * probably sufficient to use symbolStem or a plain symbol if the symbol
+     * isn't uniquified in the resulting plan.
+     *
+     * In a suffiently complex query, it may still be useful to use withSymbol
+     * to trace the origin of the symbol in question, but for simple queries,
+     * doing so is probably overkill.
+     *
+     * Examples of using withSymbol can be found in TestLogicalPlanner
+     * Examples of using symbolStem can be found in TestMergeIdenticalWindows
+     */
+    public PlanMatchPattern withSymbol(Symbol expectedSymbol, String alias)
+    {
+        return with(new SymbolMatcher(expectedSymbol, alias));
     }
 
     public PlanMatchPattern with(Matcher matcher)
     {
         matchers.add(matcher);
+        return this;
+    }
+
+    public PlanMatchPattern withAlias(String alias, HackMatcher matcher)
+    {
+        matchers.add(new Alias(alias, matcher));
+        return this;
+    }
+
+    public static HackMatcher columnReference(String tableName, String columnName)
+    {
+        return new ColumnReference(tableName, columnName);
+    }
+
+    public static ExpressionAssignment expression(String expression)
+    {
+        return new ExpressionAssignment(expression);
+    }
+
+    public PlanMatchPattern withOutput(String alias)
+    {
+        matchers.add(new OutputMatcher(alias));
         return this;
     }
 
@@ -169,29 +403,20 @@ public final class PlanMatchPattern
         return sourcePatterns.isEmpty();
     }
 
-    private static List<Expression> toExpressionList(String... args)
+    /*
+     * Caveat Emptor: FunctionCall's come from the parser, and represent what
+     * the user has typed. As such, they don't contain a WindowFrame if one
+     * isn't specified in the SQL. In this case, the correct value to pass is
+     * Optional.empty()
+     */
+    public static FunctionCall functionCall(String name, Optional<WindowFrame> frame, SymbolReference... args)
     {
-        ImmutableList.Builder<Expression> builder = ImmutableList.builder();
-        for (String arg : args) {
-            if (arg.equals("*")) {
-                builder.add(new PlanMatchPattern.AnySymbolReference());
-            }
-            else {
-                builder.add(new SymbolReference(arg));
-            }
-        }
-
-        return builder.build();
+        return new RelaxedEqualityFunctionCall(QualifiedName.of(name), Arrays.asList(args), frame);
     }
 
-    public static FunctionCall functionCall(String name, Window window, boolean distinct, String... args)
+    public static FunctionCallMaker functionCall(String name, MagicSymbol... args)
     {
-        return new FunctionCall(QualifiedName.of(name), Optional.of(window), distinct, toExpressionList(args));
-    }
-
-    public static FunctionCall functionCall(String name, String... args)
-    {
-        return new RelaxedEqualityFunctionCall(QualifiedName.of(name), toExpressionList(args));
+        return new FunctionCallMaker(QualifiedName.of(name), Arrays.asList(args));
     }
 
     @Override
@@ -247,10 +472,150 @@ public final class PlanMatchPattern
         return Strings.repeat("    ", indent);
     }
 
-    private static class AnySymbolReference
-            extends SymbolReference
+    public static SymbolStem symbolStem(String stem)
     {
-        AnySymbolReference()
+        return new SymbolStem(stem);
+    }
+
+    /*
+     * All comments below about Symbols apply to SymbolReferences as well.
+     *
+     * This is the result of a compromise to satisfy as many of the following
+     * constraints as possible:
+     *
+     * 1) Many objects we want to compare in plans already define equals
+     * methods. We should use these to the greatest degree possible in the
+     * various Matchers, because there's no test-specific code that can get
+     * out of date.
+     * 2) Many of said objects contain either Symbols.
+     * 3) Symbols in the final Plan may be decorated by the SymbolAllocator to
+     * make them unique as needed.
+     * 4) There's no way to know a-priori what the decorated name of a Symbol
+     * will be in the plan. Even if we could, future changes to the planner
+     * might change the name of the Symbols in the plan, rendering the expected
+     * values in tests that depended on them out of date.
+     *
+     * The solution to writing expected plans that match actual plans and are
+     * as self-maintaining as possible is to extend Symbol so that the
+     * following returns true:
+     *   expectedSymbol.equals(actualDecoratedSymbol)
+     *
+     * This ensures that we can construct expected objects containing Symbols
+     * and use their built-in equals() methods to compare them to the actual
+     * objects in the plan.
+     *
+     * To actually implement this, we need to handle comparing the equality
+     * comparison between e.g. column_name and column_name_829. This is done by
+     * treating column_name as a stem and making sure that everything prior to
+     * the last underscore in column_name_829 is the same as the stem.
+     *
+     * This basically reverses the transformation SymbolAllocator does to
+     * create the unique column_name_829 Symbol name in the first place.
+     *
+     * A different approach to this that is problematic is to have a
+     * TestSymbolAllocator that keeps track of the reverse mappings in a Map
+     * having entries such as "column_name_927" -> "column_name". The issue
+     * with this is that constructing the expected plan for a query would have
+     * to depend on the actual plan, which is what actually has the
+     * SymbolAllocator. Having the expected value for a test depend on the
+     * actual value seems fishy.
+     */
+    private interface Stem<T>
+    {
+        String getStem();
+        String getOtherName(T other);
+
+        default boolean stemEquals(Object o, Class<T> clazz, Function<T, String> getName)
+        {
+            if (this == o) {
+                return true;
+            }
+
+            if (o == null) {
+                return false;
+            }
+
+            if (!clazz.equals(o.getClass())) {
+                return false;
+            }
+
+            T other = clazz.cast(o);
+            String name = getOtherName(other);
+            int endIndex = name.lastIndexOf('_');
+            String otherStem = endIndex == -1 ? name : name.substring(0, endIndex);
+            return getStem().equals(otherStem);
+        }
+    }
+
+    private static class SymbolStem extends Symbol
+        implements Stem<Symbol>
+    {
+        private final String stem;
+
+        private SymbolStem(String stem)
+        {
+            super(stem + "_*");
+            this.stem = requireNonNull(stem);
+        }
+
+        @Override
+        public boolean equals(Object o)
+        {
+            // Inconsistent with hashCode. See below.
+            return stemEquals(o, Symbol.class, Symbol::getName);
+        }
+
+        @Override
+        public int hashCode()
+        {
+            /*
+             * hashCode() and equals() are inconsistent with each other. In theory, we'd like to
+             * throw UnsupportedOperationException here. We can't, however because creating a
+             * WindowNode.Specification with more than one Ordering requires being able to put
+             * Symbols in a hash table.
+             *
+             * It turns out that this being inconsistent with equals ends up not mattering. We
+             * can't meaningfully do an equals comparison on the hash tables representing the
+             * expected Orderings and the actual Orderings because that would require knowing
+             * the mangled symbols in the expected value a priori. Instead, we do an equals
+             * comparison that relies solely on equals() returning true for mangled and
+             * non-mangled symbols
+             */
+            return stem.hashCode();
+        }
+
+        @Override
+        public String getStem()
+        {
+            return stem;
+        }
+
+        @Override
+        public String getOtherName(Symbol other)
+        {
+            return other.getName();
+        }
+
+        @Override
+        public SymbolReference toSymbolReference()
+        {
+            return new SymbolReferenceStem(stem);
+        }
+    }
+
+    public static SymbolReference anySymbolReference()
+    {
+        return new AnySymbolReference();
+    }
+
+    public static SymbolReference symbolReferenceStem(String stem)
+    {
+        return new SymbolReferenceStem(stem);
+    }
+
+    private static class AnySymbolReference extends SymbolReference
+    {
+        private AnySymbolReference()
         {
             super("*");
         }
@@ -262,7 +627,7 @@ public final class PlanMatchPattern
                 return true;
             }
 
-            if (o == null || !SymbolReference.class.isInstance(o)) {
+            if (o == null || !SymbolReference.class.equals(o.getClass())) {
                 return false;
             }
 
@@ -276,12 +641,57 @@ public final class PlanMatchPattern
         }
     }
 
-    private static class RelaxedEqualityFunctionCall
-            extends FunctionCall
+    private static class SymbolReferenceStem extends SymbolReference
+            implements Stem<SymbolReference>
     {
-        RelaxedEqualityFunctionCall(QualifiedName name, List<Expression> arguments)
+        private final String stem;
+
+        private SymbolReferenceStem(String stem)
+        {
+            super(stem + "_*");
+            this.stem = requireNonNull(stem);
+        }
+
+        @Override
+        public boolean equals(Object o)
+        {
+            return stemEquals(o, SymbolReference.class, SymbolReference::getName);
+        }
+
+        @Override
+        public int hashCode()
+        {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public String getStem()
+        {
+            return stem;
+        }
+
+        @Override
+        public String getOtherName(SymbolReference other)
+        {
+            return other.getName();
+        }
+    }
+
+    private static class RelaxedEqualityFunctionCall extends FunctionCall
+    {
+        /*
+         * FunctionCalls for window functions must have a Window. By the time
+         * the we've gone through the optimizers, everything but the Frame
+         * has a corresponding entry in the WindowNode. Since the WindowNode
+         * has had default entries filled in, we only need to compare the
+         * window frame with the one in the FunctionCall in equals.
+         */
+        Optional<WindowFrame> frame;
+
+        private RelaxedEqualityFunctionCall(QualifiedName name, List<Expression> arguments, Optional<WindowFrame> frame)
         {
             super(name, arguments);
+            this.frame = requireNonNull(frame);
         }
 
         @Override
@@ -290,18 +700,29 @@ public final class PlanMatchPattern
             if (this == obj) {
                 return true;
             }
+
             if (obj == null || obj.getClass() != FunctionCall.class) {
                 return false;
             }
+
             FunctionCall o = (FunctionCall) obj;
+
+            /*
+             * A FunctionCall representing a window function must have a
+             * window. If not, there's a failure somewhere upstream.
+             */
+            checkState(o.getWindow().isPresent());
+
             return Objects.equals(getName(), o.getName()) &&
-                    Objects.equals(getArguments(), o.getArguments());
+                    Objects.equals(getArguments(), o.getArguments()) &&
+                    Objects.equals(frame, o.getWindow().get().getFrame());
         }
 
         @Override
         public int hashCode()
         {
-            return Objects.hash(getName(), getArguments());
+            // This is a test object. We shouldn't put it in a hash table.
+            throw new UnsupportedOperationException();
         }
     }
 }
