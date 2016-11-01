@@ -91,6 +91,10 @@ public final class PlanMatchPattern
         return result.addColumnReferences(expectedTableName, columnReferences);
     }
 
+    /*
+     * Needs a different name because the signature of constrainedTableScan(String, List)
+     * and tableScan(String, List) are the same after type erasure.
+     */
     public static PlanMatchPattern constrainedTableScan(String expectedTableName, Map<String, Domain> constraint)
     {
         return node(TableScanNode.class).with(new TableScanMatcher(expectedTableName, constraint));
@@ -104,18 +108,16 @@ public final class PlanMatchPattern
 
     private PlanMatchPattern addColumnReferences(String expectedTableName, Map<String, String> columnReferences)
     {
-        for (Map.Entry<String, String> reference : columnReferences.entrySet()) {
-            withAlias(reference.getKey(), columnReference(expectedTableName, reference.getValue()));
-        }
+        columnReferences.entrySet().forEach(
+                reference -> withAlias(reference.getKey(), columnReference(expectedTableName, reference.getValue())));
         return this;
     }
 
     public static PlanMatchPattern aggregate(Map<String, FunctionCallMaker> assignments, PlanMatchPattern source)
     {
         PlanMatchPattern result = node(AggregationNode.class, source);
-        for (Map.Entry<String, FunctionCallMaker> assignment : assignments.entrySet()) {
-            result.withAlias(assignment.getKey(), new AggregationFunctionMatcher(assignment.getValue()));
-        }
+        assignments.entrySet().forEach(
+                assignment -> result.withAlias(assignment.getKey(), new AggregationFunctionMatcher(assignment.getValue())));
         return result;
     }
 
@@ -127,9 +129,7 @@ public final class PlanMatchPattern
     public static PlanMatchPattern output(List<String> outputs, PlanMatchPattern source)
     {
         PlanMatchPattern result = output(source);
-        for (String output : outputs) {
-            result.withOutput(output);
-        }
+        outputs.forEach(result::withOutput);
         return result;
     }
 
@@ -141,9 +141,8 @@ public final class PlanMatchPattern
     public static PlanMatchPattern project(Map<String, ExpressionAssignment> assignments, PlanMatchPattern source)
     {
         PlanMatchPattern result = project(source);
-        for (Map.Entry<String, ExpressionAssignment> assignment : assignments.entrySet()) {
-            result.withAlias(assignment.getKey(), assignment.getValue());
-        }
+        assignments.entrySet().forEach(
+                assignment -> result.withAlias(assignment.getKey(), assignment.getValue()));
         return result;
     }
 
@@ -161,12 +160,12 @@ public final class PlanMatchPattern
     {
         private final String alias;
 
-        public MagicSymbol(String alias)
+        private MagicSymbol(String alias)
         {
             this.alias = requireNonNull(alias, "alias is null");
         }
 
-        public Symbol toSymbol(ExpressionAliases aliases)
+        Symbol toSymbol(ExpressionAliases aliases)
         {
             return new AliasedSymbol(alias, aliases);
         }
@@ -220,13 +219,13 @@ public final class PlanMatchPattern
         MagicSymbol left;
         MagicSymbol right;
 
-        public EquiMaker(MagicSymbol left, MagicSymbol right)
+        private EquiMaker(MagicSymbol left, MagicSymbol right)
         {
             this.left = requireNonNull(left);
             this.right = requireNonNull(right);
         }
 
-        public JoinNode.EquiJoinClause rehydrate(ExpressionAliases aliases)
+        JoinNode.EquiJoinClause rehydrate(ExpressionAliases aliases)
         {
             return new JoinNode.EquiJoinClause(left.toSymbol(aliases), right.toSymbol(aliases));
         }
@@ -237,13 +236,13 @@ public final class PlanMatchPattern
         QualifiedName name;
         List<MagicSymbol> args;
 
-        public FunctionCallMaker(QualifiedName name, List<MagicSymbol> args)
+        private FunctionCallMaker(QualifiedName name, List<MagicSymbol> args)
         {
             this.name = requireNonNull(name, "name is null");
             this.args = requireNonNull(args, "args is null");
         }
 
-        public FunctionCall rehydrate(ExpressionAliases aliases)
+        FunctionCall rehydrate(ExpressionAliases aliases)
         {
             List<Expression> symbolArgs = args
                     .stream()
@@ -275,7 +274,7 @@ public final class PlanMatchPattern
         return node(ApplyNode.class, inputPattern, subqueryPattern).with(new CorrelationMatcher(correlationSymbolAliases));
     }
 
-    public PlanMatchPattern(List<PlanMatchPattern> sourcePatterns)
+    private PlanMatchPattern(List<PlanMatchPattern> sourcePatterns)
     {
         requireNonNull(sourcePatterns, "sourcePatterns are null");
 
