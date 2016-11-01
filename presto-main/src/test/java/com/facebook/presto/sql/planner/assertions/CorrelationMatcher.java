@@ -45,6 +45,7 @@ public class CorrelationMatcher
     public boolean upMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
     {
         checkState(downMatches(node, session, metadata, expressionAliases));
+
         ApplyNode applyNode = (ApplyNode) node;
 
         if (correlation.size() != applyNode.getCorrelation().size()) {

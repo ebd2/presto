@@ -18,17 +18,20 @@ import com.facebook.presto.metadata.Metadata;
 import com.facebook.presto.sql.planner.Symbol;
 import com.facebook.presto.sql.planner.plan.PlanNode;
 import com.facebook.presto.sql.tree.Expression;
+import com.google.common.collect.ImmutableList;
+
+import java.util.List;
 
 import static java.util.Objects.requireNonNull;
 
 public class OutputMatcher
     implements Matcher
 {
-    private final String alias;
+    private final List<String> aliases;
 
-    public OutputMatcher(String alias)
+    public OutputMatcher(ImmutableList<String> aliases)
     {
-        this.alias = requireNonNull(alias, "alias is null");
+        this.aliases = ImmutableList.copyOf(requireNonNull(aliases, "aliases is null"));
     }
 
     @Override
@@ -40,12 +43,21 @@ public class OutputMatcher
     @Override
     public boolean upMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
     {
-        Expression expression = expressionAliases.get(alias);
-        for (Symbol outputSymbol : node.getOutputSymbols()) {
-            if (expression.equals(outputSymbol.toSymbolReference())) {
-                return true;
+        int i = 0;
+        for (String alias : aliases) {
+            Expression expression = expressionAliases.get(alias);
+            boolean found = false;
+            while (i < node.getOutputSymbols().size()) {
+                Symbol outputSymbol = node.getOutputSymbols().get(i++);
+                if (expression.equals(outputSymbol.toSymbolReference())) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                return false;
             }
         }
-        return false;
+        return true;
     }
 }

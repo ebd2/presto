@@ -20,7 +20,6 @@ import com.facebook.presto.sql.planner.Symbol;
 import com.facebook.presto.sql.planner.plan.PlanNode;
 import com.facebook.presto.sql.planner.plan.ProjectNode;
 import com.facebook.presto.sql.tree.Expression;
-import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 
 import java.util.Map;
@@ -71,7 +70,7 @@ public class ExpressionAssignment
 
         ImmutableList<Expression> matches = matchesBuilder.build();
         checkState(matches.size() < 2, "Ambiguous expression %s matches multiple assignments", expression,
-                Joiner.on(", ").join((matches.stream().map(Expression::toString).collect(Collectors.toList()))));
+                (matches.stream().map(Expression::toString).collect(Collectors.joining(", "))));
         return result;
     }
 

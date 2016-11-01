@@ -57,13 +57,10 @@ final class TableScanMatcher
     public boolean upMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
     {
         checkState(downMatches(node, session, metadata, expressionAliases));
-        if (node instanceof TableScanNode) {
-            TableScanNode tableScanNode = (TableScanNode) node;
-            TableMetadata tableMetadata = metadata.getTableMetadata(session, tableScanNode.getTable());
-            String actualTableName = tableMetadata.getTable().getTableName();
-            return expectedTableName.equalsIgnoreCase(actualTableName) && domainMatches(tableScanNode, session, metadata);
-        }
-        return false;
+        TableScanNode tableScanNode = (TableScanNode) node;
+        TableMetadata tableMetadata = metadata.getTableMetadata(session, tableScanNode.getTable());
+        String actualTableName = tableMetadata.getTable().getTableName();
+        return expectedTableName.equalsIgnoreCase(actualTableName) && domainMatches(tableScanNode, session, metadata);
     }
 
     private boolean domainMatches(TableScanNode tableScanNode, Session session, Metadata metadata)

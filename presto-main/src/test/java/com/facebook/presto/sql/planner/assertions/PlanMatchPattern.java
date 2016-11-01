@@ -27,7 +27,6 @@ import com.facebook.presto.sql.planner.plan.PlanNode;
 import com.facebook.presto.sql.planner.plan.ProjectNode;
 import com.facebook.presto.sql.planner.plan.SemiJoinNode;
 import com.facebook.presto.sql.planner.plan.TableScanNode;
-import com.facebook.presto.sql.planner.plan.WindowNode;
 import com.facebook.presto.sql.tree.Expression;
 import com.facebook.presto.sql.tree.FunctionCall;
 import com.facebook.presto.sql.tree.QualifiedName;
@@ -126,10 +125,10 @@ public final class PlanMatchPattern
         return node(OutputNode.class, source);
     }
 
-    public static PlanMatchPattern output(List<String> outputs, PlanMatchPattern source)
+    public static PlanMatchPattern output(ImmutableList<String> outputs, PlanMatchPattern source)
     {
         PlanMatchPattern result = output(source);
-        outputs.forEach(result::withOutput);
+        result.withOutputs(outputs);
         return result;
     }
 
@@ -174,18 +173,18 @@ public final class PlanMatchPattern
                 extends Symbol
         {
             private final String alias;
-            private final ExpressionAliases aliases;
+            private final ExpressionAliases expressionAliases;
 
-            private AliasedSymbol(String alias, ExpressionAliases aliases)
+            private AliasedSymbol(String alias, ExpressionAliases expressionAliases)
             {
                 super(alias);
-                this.alias = requireNonNull(alias);
-                this.aliases = requireNonNull(aliases);
+                this.alias = requireNonNull(alias, "alias is null");
+                this.expressionAliases = requireNonNull(expressionAliases, "expressionAliases is null");
             }
 
             public String getName()
             {
-                Expression value = aliases.get(alias);
+                Expression value = expressionAliases.get(alias);
                 checkState(value instanceof SymbolReference, "%s is not a SymbolReference", value);
                 return ((SymbolReference) value).getName();
             }
@@ -197,7 +196,7 @@ public final class PlanMatchPattern
                     return true;
                 }
 
-                if (obj == null || !Symbol.class.equals(obj.getClass())) {
+                if (obj == null || !(obj instanceof Symbol)) {
                     return false;
                 }
 
@@ -221,8 +220,8 @@ public final class PlanMatchPattern
 
         private EquiMaker(MagicSymbol left, MagicSymbol right)
         {
-            this.left = requireNonNull(left);
-            this.right = requireNonNull(right);
+            this.left = requireNonNull(left, "left is null");
+            this.right = requireNonNull(right, "right is null");
         }
 
         JoinNode.EquiJoinClause rehydrate(ExpressionAliases aliases)
@@ -326,9 +325,9 @@ public final class PlanMatchPattern
         return new ExpressionAssignment(expression);
     }
 
-    public PlanMatchPattern withOutput(String alias)
+    public PlanMatchPattern withOutputs(ImmutableList<String> aliases)
     {
-        matchers.add(new OutputMatcher(alias));
+        matchers.add(new OutputMatcher(aliases));
         return this;
     }
 

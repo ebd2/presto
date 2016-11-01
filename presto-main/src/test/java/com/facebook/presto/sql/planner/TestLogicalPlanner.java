@@ -14,8 +14,7 @@
 package com.facebook.presto.sql.planner;
 
 import com.facebook.presto.spi.predicate.Domain;
-import com.facebook.presto.sql.planner.assertions.PlanAssert;
-import com.facebook.presto.sql.planner.assertions.PlanMatchPattern;
+import com.facebook.presto.sql.planner.assertions.BasePlanDslTest;
 import com.facebook.presto.sql.planner.plan.ApplyNode;
 import com.facebook.presto.sql.planner.plan.EnforceSingleRowNode;
 import com.facebook.presto.sql.planner.plan.IndexJoinNode;
@@ -23,8 +22,6 @@ import com.facebook.presto.sql.planner.plan.JoinNode;
 import com.facebook.presto.sql.planner.plan.PlanNode;
 import com.facebook.presto.sql.planner.plan.SemiJoinNode;
 import com.facebook.presto.sql.planner.plan.ValuesNode;
-import com.facebook.presto.testing.LocalQueryRunner;
-import com.facebook.presto.tpch.TpchConnectorFactory;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import org.testng.annotations.Test;
@@ -52,28 +49,12 @@ import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.symbol
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.tableScan;
 import static com.facebook.presto.sql.planner.plan.JoinNode.Type.INNER;
 import static com.facebook.presto.sql.planner.plan.JoinNode.Type.LEFT;
-import static com.facebook.presto.testing.TestingSession.testSessionBuilder;
 import static io.airlift.slice.Slices.utf8Slice;
 import static java.util.Objects.requireNonNull;
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.fail;
 
-public class TestLogicalPlanner
+public class TestLogicalPlanner extends BasePlanDslTest
 {
-    private final LocalQueryRunner queryRunner;
-
-    public TestLogicalPlanner()
-    {
-        this.queryRunner = new LocalQueryRunner(testSessionBuilder()
-                .setCatalog("local")
-                .setSchema("tiny")
-                .build());
-
-        queryRunner.createCatalog(queryRunner.getDefaultSession().getCatalog().get(),
-                new TpchConnectorFactory(1),
-                ImmutableMap.<String, String>of());
-    }
-
     @Test
     public void testJoin()
     {
@@ -249,36 +230,6 @@ public class TestLogicalPlanner
                                                                                         tableScan("orders")),
                                                                                 project(ImmutableMap.of("NON_NULL", expression("true")),
                                                                                         node(ValuesNode.class))))))))))));
-    }
-
-    private void assertPlan(String sql, PlanMatchPattern pattern)
-    {
-        assertPlan(sql, LogicalPlanner.Stage.OPTIMIZED_AND_VALIDATED, pattern);
-    }
-
-    private void assertPlan(String sql, LogicalPlanner.Stage stage, PlanMatchPattern pattern)
-    {
-        queryRunner.inTransaction(transactionSession -> {
-            Plan actualPlan = queryRunner.createPlan(transactionSession, sql, stage);
-            PlanAssert.assertPlan(transactionSession, queryRunner.getMetadata(), actualPlan, pattern);
-            return null;
-        });
-    }
-
-    private Plan plan(String sql)
-    {
-        return plan(sql, LogicalPlanner.Stage.OPTIMIZED_AND_VALIDATED);
-    }
-
-    private Plan plan(String sql, LogicalPlanner.Stage stage)
-    {
-        try {
-            return queryRunner.inTransaction(transactionSession -> queryRunner.createPlan(transactionSession, sql, stage));
-        }
-        catch (RuntimeException ex) {
-            fail("Invalid SQL: " + sql, ex);
-            return null; // make compiler happy
-        }
     }
 
     private static final class PlanNodeExtractor

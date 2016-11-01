@@ -22,8 +22,8 @@ import com.google.common.collect.ImmutableSet;
 
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
+import static com.facebook.presto.util.ImmutableCollectors.toImmutableSet;
 import static com.google.common.base.MoreObjects.toStringHelper;
 import static com.google.common.base.Preconditions.checkState;
 import static java.util.Objects.requireNonNull;
@@ -43,7 +43,12 @@ final class JoinMatcher
     @Override
     public boolean downMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
     {
-        return node instanceof JoinNode;
+        if (!(node instanceof JoinNode)) {
+            return false;
+        }
+
+        JoinNode joinNode = (JoinNode) node;
+        return joinNode.getType() == joinType;
     }
 
     @Override
@@ -52,9 +57,6 @@ final class JoinMatcher
         checkState(downMatches(node, session, metadata, expressionAliases));
 
         JoinNode joinNode = (JoinNode) node;
-        if (joinNode.getType() != joinType) {
-            return false;
-        }
 
         if (joinNode.getCriteria().size() != equiCriteria.size()) {
             return false;
@@ -66,9 +68,9 @@ final class JoinMatcher
          */
         Set<JoinNode.EquiJoinClause> actual = ImmutableSet.copyOf(joinNode.getCriteria());
         Set<JoinNode.EquiJoinClause> expected =
-                ImmutableSet.copyOf(equiCriteria.stream()
+                equiCriteria.stream()
                 .map(maker -> maker.rehydrate(expressionAliases))
-                .collect(Collectors.toSet()));
+                .collect(toImmutableSet());
 
         return expected.equals(actual);
     }

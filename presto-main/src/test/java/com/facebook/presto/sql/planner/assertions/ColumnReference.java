@@ -25,6 +25,7 @@ import com.facebook.presto.sql.planner.plan.TableScanNode;
 import java.util.Map;
 import java.util.Optional;
 
+import static com.google.common.base.Preconditions.checkState;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 
@@ -56,37 +57,37 @@ public class ColumnReference
             return Optional.empty();
         }
 
-        ColumnHandle columnHandle = getColumnHandle(tableScanNode.getTable(), session, metadata);
+        Optional<ColumnHandle> columnHandle = getColumnHandle(tableScanNode.getTable(), session, metadata);
 
-        requireNonNull(columnHandle, format("Table %s doesn't have a column %s. Typo in test?", tableName, columnName));
+        checkState(columnHandle.isPresent(), format("Table %s doesn't have column %s. Typo in test?", tableName, columnName));
 
-        return getAssignedSymbol(tableScanNode, columnHandle);
+        return getAssignedSymbol(tableScanNode, columnHandle.get());
     }
 
     private Optional<Symbol> getAssignedSymbol(TableScanNode tableScanNode, ColumnHandle columnHandle)
     {
+        Optional<Symbol> result = Optional.empty();
         for (Map.Entry<Symbol, ColumnHandle> entry : tableScanNode.getAssignments().entrySet()) {
             if (entry.getValue().equals(columnHandle)) {
-                return Optional.of(entry.getKey());
+                checkState(!result.isPresent(), "Multiple ColumnHandles found for %s:%s in table scan assignments", tableName, columnName);
+                result = Optional.of(entry.getKey());
             }
         }
-
-        return Optional.empty();
+        return result;
     }
 
-    private ColumnHandle getColumnHandle(TableHandle tableHandle, Session session, Metadata metadata)
+    private Optional<ColumnHandle> getColumnHandle(TableHandle tableHandle, Session session, Metadata metadata)
     {
-        for (Map.Entry<String, ColumnHandle> entry : metadata.getColumnHandles(session, tableHandle).entrySet()) {
-            if (columnName.equals(entry.getKey())) {
-                return entry.getValue();
-            }
-        }
-        return null;
+        return metadata.getColumnHandles(session, tableHandle).entrySet()
+                .stream()
+                .filter(entry -> columnName.equals(entry.getKey()))
+                .map(Map.Entry::getValue)
+                .findFirst();
     }
 
     @Override
     public String toString()
     {
-        return format("%s.%s", tableName, columnName);
+        return format("%s:%s", tableName, columnName);
     }
 }

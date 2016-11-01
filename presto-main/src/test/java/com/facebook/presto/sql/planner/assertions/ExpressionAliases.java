@@ -41,9 +41,9 @@ public final class ExpressionAliases
 
     public void put(String alias, Expression expression)
     {
-        alias = alias(alias);
-        checkState(!map.containsKey(alias), "Alias '%s' points to different expression '%s' and '%s'", alias, expression, map.get(alias));
-        checkState(!map.values().contains(expression), "Expression '%s' is already pointed by different alias than '%s', check mapping for '%s'", expression, alias, map);
+        alias = toKey(alias);
+        checkState(!map.containsKey(alias), "Alias '%s' already bound to expression '%s'. Tried to rebind to '%s'", alias, map.get(alias), expression);
+        checkState(!map.values().contains(expression), "Expression '%s' is already bound in %s. Tried to rebind as '%s'.", expression, map, alias);
         map.put(alias, expression);
     }
 
@@ -56,15 +56,16 @@ public final class ExpressionAliases
 
     public Expression get(String alias)
     {
-        alias = alias(alias);
+        alias = toKey(alias);
         Expression result = map.get(alias);
-        requireNonNull(result, format("missing expression for alias %s", alias));
+        checkState(result != null, format("missing expression for alias %s", alias));
         return result;
     }
 
-    private String alias(String alias)
+    private String toKey(String alias)
     {
-        return alias.toLowerCase().replace("(", "").replace(")", "").replace("\"", "");
+        // Required because the SqlParser lower cases SymbolReferences in the expressions we parse with it.
+        return alias.toLowerCase();
     }
 
     public void updateAssignments(Map<Symbol, Expression> assignments)

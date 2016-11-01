@@ -13,13 +13,10 @@
  */
 package com.facebook.presto.sql.planner;
 
+import com.facebook.presto.sql.planner.assertions.BasePlanDslTest;
 import com.facebook.presto.sql.planner.assertions.HackMatcher;
-import com.facebook.presto.sql.planner.assertions.PlanAssert;
-import com.facebook.presto.sql.planner.assertions.PlanMatchPattern;
 import com.facebook.presto.sql.planner.plan.OutputNode;
 import com.facebook.presto.sql.planner.plan.TableScanNode;
-import com.facebook.presto.testing.LocalQueryRunner;
-import com.facebook.presto.tpch.TpchConnectorFactory;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import org.testng.annotations.Test;
@@ -38,24 +35,14 @@ import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.projec
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.symbol;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.tableScan;
 import static com.facebook.presto.sql.planner.plan.JoinNode.Type.INNER;
-import static com.facebook.presto.testing.TestingSession.testSessionBuilder;
-import static org.testng.Assert.fail;
 
-public class TestPlanDsl
+public class TestPlanDsl extends BasePlanDslTest
 {
-    private final LocalQueryRunner queryRunner;
     private final HackMatcher lineitemOrderkeyColumn;
 
     public TestPlanDsl()
     {
-        this.queryRunner = new LocalQueryRunner(testSessionBuilder()
-                .setCatalog("local")
-                .setSchema("tiny")
-                .build());
-
-        queryRunner.createCatalog(queryRunner.getDefaultSession().getCatalog().get(),
-                new TpchConnectorFactory(1),
-                ImmutableMap.<String, String>of());
+        super();
 
         lineitemOrderkeyColumn = columnReference("lineitem", "orderkey");
     }
@@ -66,7 +53,45 @@ public class TestPlanDsl
         assertPlan("SELECT orderkey FROM lineitem",
                 node(OutputNode.class,
                         node(TableScanNode.class).withAlias("ORDERKEY", lineitemOrderkeyColumn))
-                .withOutput("ORDERKEY"));
+                .withOutputs(ImmutableList.of("ORDERKEY")));
+    }
+
+    @Test
+    public void testOutputSameColumnMultipleTimes()
+    {
+        assertPlan("SELECT orderkey, orderkey FROM lineitem",
+                output(ImmutableList.of("ORDERKEY", "ORDERKEY"),
+                        node(TableScanNode.class).withAlias("ORDERKEY", lineitemOrderkeyColumn)));
+    }
+
+    @Test
+    public void testOutputTooFewOutputs()
+    {
+        assertNotPlan("SELECT orderkey FROM lineitem",
+                output(ImmutableList.of("ORDERKEY", "ORDERKEY"),
+                        node(TableScanNode.class).withAlias("ORDERKEY", lineitemOrderkeyColumn)));
+    }
+
+    @Test
+    public void testOutputSameColumnMultipleTimesWithOtherOutputs()
+    {
+        assertPlan("SELECT extendedprice, orderkey, discount, orderkey, linenumber FROM lineitem",
+                output(ImmutableList.of("ORDERKEY", "ORDERKEY"),
+                        /*
+                         * This is a project node, but this gives us a convenient way to verify that
+                         * visitProject is correctly handled through an anyTree.
+                         */
+                        anyTree(
+                                node(TableScanNode.class).withAlias("ORDERKEY", lineitemOrderkeyColumn))));
+    }
+
+    @Test
+    public void testUnreferencedSymbolsDontNeedBinding()
+    {
+        assertPlan("SELECT orderkey, 2 FROM lineitem",
+                output(ImmutableList.of("ORDERKEY"),
+                        anyTree(
+                                node(TableScanNode.class).withAlias("ORDERKEY", lineitemOrderkeyColumn))));
     }
 
     @Test
@@ -82,9 +107,8 @@ public class TestPlanDsl
     public void testTableScan()
     {
         assertPlan("SELECT orderkey FROM lineitem",
-                node(OutputNode.class,
-                        tableScan("lineitem", ImmutableMap.of("ORDERKEY", "orderkey")))
-                .withOutput("ORDERKEY"));
+                output(ImmutableList.of("ORDERKEY"),
+                        tableScan("lineitem", ImmutableMap.of("ORDERKEY", "orderkey"))));
     }
 
     @Test
@@ -110,25 +134,23 @@ public class TestPlanDsl
                                                 tableScan("nation", ImmutableMap.of("NATIONKEY", "nationkey")))))));
     }
 
-    @Test(expectedExceptions = { NullPointerException.class })
+    @Test(expectedExceptions = { IllegalStateException.class }, expectedExceptionsMessageRegExp = ".* doesn't have column .*")
     public void testBadColumn()
     {
         assertPlan("SELECT orderkey FROM lineitem",
                 node(OutputNode.class,
-                        node(TableScanNode.class).withAlias("ORDERKEY", columnReference("lineitem", "NXCOLUMN")))
-                .withOutput("NXALIAS"));
+                        node(TableScanNode.class).withAlias("ORDERKEY", columnReference("lineitem", "NXCOLUMN"))));
     }
 
-    @Test(expectedExceptions = { NullPointerException.class })
+    @Test(expectedExceptions = { IllegalStateException.class }, expectedExceptionsMessageRegExp = "missing expression for alias .*")
     public void testBadAlias()
     {
         assertPlan("SELECT orderkey FROM lineitem",
-                node(OutputNode.class,
-                        node(TableScanNode.class).withAlias("ORDERKEY", lineitemOrderkeyColumn))
-                        .withOutput("NXALIAS"));
+                output(ImmutableList.of("NXALIAS"),
+                        node(TableScanNode.class).withAlias("ORDERKEY", lineitemOrderkeyColumn)));
     }
 
-    @Test(expectedExceptions = { IllegalStateException.class })
+    @Test(expectedExceptions = { IllegalStateException.class }, expectedExceptionsMessageRegExp = ".*already bound to expression.*")
     public void testDuplicateAliases()
     {
         assertPlan("SELECT o.orderkey FROM orders o, lineitem l WHERE l.orderkey = o.orderkey",
@@ -140,33 +162,13 @@ public class TestPlanDsl
                                         tableScan("lineitem").withAlias("ORDERS_OK", columnReference("lineitem", "orderkey"))))));
     }
 
-    private void assertPlan(String sql, PlanMatchPattern pattern)
+    @Test(expectedExceptions = { IllegalStateException.class }, expectedExceptionsMessageRegExp = ".*already bound in.*")
+    public void testBindMultipleAliasesSameExpression()
     {
-        assertPlan(sql, LogicalPlanner.Stage.OPTIMIZED_AND_VALIDATED, pattern);
-    }
-
-    private void assertPlan(String sql, LogicalPlanner.Stage stage, PlanMatchPattern pattern)
-    {
-        queryRunner.inTransaction(transactionSession -> {
-            Plan actualPlan = queryRunner.createPlan(transactionSession, sql, stage);
-            PlanAssert.assertPlan(transactionSession, queryRunner.getMetadata(), actualPlan, pattern);
-            return null;
-        });
-    }
-
-    private Plan plan(String sql)
-    {
-        return plan(sql, LogicalPlanner.Stage.OPTIMIZED_AND_VALIDATED);
-    }
-
-    private Plan plan(String sql, LogicalPlanner.Stage stage)
-    {
-        try {
-            return queryRunner.inTransaction(transactionSession -> queryRunner.createPlan(transactionSession, sql, stage));
-        }
-        catch (RuntimeException ex) {
-            fail("Invalid SQL: " + sql, ex);
-            return null; // make compiler happy
-        }
+        assertPlan("SELECT orderkey FROM lineitem",
+                output(ImmutableList.of("ORDERKEY", "TWO"),
+                        tableScan("lineitem")
+                                .withAlias("FIRST", lineitemOrderkeyColumn)
+                                .withAlias("SECOND", lineitemOrderkeyColumn)));
     }
 }
