@@ -135,11 +135,6 @@ public final class PlanMatchPattern
         return result;
     }
 
-    public static PlanMatchPattern window(WindowNode.Specification specification, List<FunctionCall> functionCalls, PlanMatchPattern source)
-    {
-        return any(source).with(new WindowMatcher(specification, functionCalls));
-    }
-
     public static PlanMatchPattern project(PlanMatchPattern source)
     {
         return node(ProjectNode.class, source);
