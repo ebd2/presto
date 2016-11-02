@@ -37,13 +37,9 @@ import static com.facebook.presto.sql.planner.plan.JoinNode.Type.INNER;
 
 public class TestPlanDsl extends BasePlanTest
 {
-    private final RvalueMatcher lineitemOrderkeyColumn;
-
     public TestPlanDsl()
     {
         super();
-
-        lineitemOrderkeyColumn = columnReference("lineitem", "orderkey");
     }
 
     @Test
@@ -51,7 +47,7 @@ public class TestPlanDsl extends BasePlanTest
     {
         assertPlan("SELECT orderkey FROM lineitem",
                 node(OutputNode.class,
-                        node(TableScanNode.class).withAlias("ORDERKEY", lineitemOrderkeyColumn))
+                        node(TableScanNode.class).withAlias("ORDERKEY", columnReference("lineitem", "orderkey")))
                 .withOutputs(ImmutableList.of("ORDERKEY")));
     }
 
@@ -60,7 +56,7 @@ public class TestPlanDsl extends BasePlanTest
     {
         assertPlan("SELECT orderkey, orderkey FROM lineitem",
                 output(ImmutableList.of("ORDERKEY", "ORDERKEY"),
-                        node(TableScanNode.class).withAlias("ORDERKEY", lineitemOrderkeyColumn)));
+                        tableScan("lineitem", ImmutableMap.of("ORDERKEY", "orderkey"))));
     }
 
     @Test
@@ -68,7 +64,7 @@ public class TestPlanDsl extends BasePlanTest
     {
         assertNotPlan("SELECT orderkey FROM lineitem",
                 output(ImmutableList.of("ORDERKEY", "ORDERKEY"),
-                        node(TableScanNode.class).withAlias("ORDERKEY", lineitemOrderkeyColumn)));
+                        tableScan("lineitem", ImmutableMap.of("ORDERKEY", "orderkey"))));
     }
 
     @Test
@@ -81,7 +77,7 @@ public class TestPlanDsl extends BasePlanTest
                          * visitProject is correctly handled through an anyTree.
                          */
                         anyTree(
-                                node(TableScanNode.class).withAlias("ORDERKEY", lineitemOrderkeyColumn))));
+                                tableScan("lineitem", ImmutableMap.of("ORDERKEY", "orderkey")))));
     }
 
     @Test
@@ -90,7 +86,7 @@ public class TestPlanDsl extends BasePlanTest
         assertPlan("SELECT orderkey, 2 FROM lineitem",
                 output(ImmutableList.of("ORDERKEY"),
                         anyTree(
-                                node(TableScanNode.class).withAlias("ORDERKEY", lineitemOrderkeyColumn))));
+                                tableScan("lineitem", ImmutableMap.of("ORDERKEY", "orderkey")))));
     }
 
     @Test
@@ -99,7 +95,7 @@ public class TestPlanDsl extends BasePlanTest
         assertPlan("SELECT orderkey, 2 FROM lineitem",
                 output(ImmutableList.of("ORDERKEY", "TWO"),
                         project(ImmutableMap.of("TWO", expression("2")),
-                                tableScan("lineitem").withAlias("ORDERKEY", lineitemOrderkeyColumn))));
+                                tableScan("lineitem", ImmutableMap.of("ORDERKEY", "orderkey")))));
     }
 
     @Test
@@ -146,7 +142,7 @@ public class TestPlanDsl extends BasePlanTest
     {
         assertPlan("SELECT orderkey FROM lineitem",
                 output(ImmutableList.of("NXALIAS"),
-                        node(TableScanNode.class).withAlias("ORDERKEY", lineitemOrderkeyColumn)));
+                        tableScan("lineitem", ImmutableMap.of("ORDERKEY", "orderkey"))));
     }
 
     @Test(expectedExceptions = { IllegalStateException.class }, expectedExceptionsMessageRegExp = ".*already bound to expression.*")
@@ -166,8 +162,6 @@ public class TestPlanDsl extends BasePlanTest
     {
         assertPlan("SELECT orderkey FROM lineitem",
                 output(ImmutableList.of("ORDERKEY", "TWO"),
-                        tableScan("lineitem")
-                                .withAlias("FIRST", lineitemOrderkeyColumn)
-                                .withAlias("SECOND", lineitemOrderkeyColumn)));
+                        tableScan("lineitem", ImmutableMap.of("FIRST", "orderkey", "SECOND", "orderkey"))));
     }
 }
