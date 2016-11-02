@@ -47,13 +47,13 @@ public class Symbol
 
     public SymbolReference toSymbolReference()
     {
-        return new SymbolReference(getName());
+        return new SymbolReference(name);
     }
 
     @Override
     public String toString()
     {
-        return getName();
+        return name;
     }
 
     @Override
@@ -68,7 +68,7 @@ public class Symbol
 
         Symbol symbol = (Symbol) o;
 
-        if (!getName().equals(symbol.getName())) {
+        if (!name.equals(symbol.name)) {
             return false;
         }
 
@@ -78,12 +78,12 @@ public class Symbol
     @Override
     public int hashCode()
     {
-        return getName().hashCode();
+        return name.hashCode();
     }
 
     @Override
     public int compareTo(Symbol o)
     {
-        return getName().compareTo(o.getName());
+        return name.compareTo(o.name);
     }
 }

@@ -14,7 +14,7 @@
 package com.facebook.presto.sql.planner;
 
 import com.facebook.presto.spi.predicate.Domain;
-import com.facebook.presto.sql.planner.assertions.BasePlanDslTest;
+import com.facebook.presto.sql.planner.assertions.BasePlanTest;
 import com.facebook.presto.sql.planner.plan.ApplyNode;
 import com.facebook.presto.sql.planner.plan.EnforceSingleRowNode;
 import com.facebook.presto.sql.planner.plan.IndexJoinNode;
@@ -53,7 +53,7 @@ import static io.airlift.slice.Slices.utf8Slice;
 import static java.util.Objects.requireNonNull;
 import static org.testng.Assert.assertEquals;
 
-public class TestLogicalPlanner extends BasePlanDslTest
+public class TestLogicalPlanner extends BasePlanTest
 {
     @Test
     public void testJoin()
@@ -221,9 +221,9 @@ public class TestLogicalPlanner extends BasePlanDslTest
                 any(any(
                         filter("FINAL_COUNT > 0",
                                 any(
-                                        aggregate(ImmutableMap.of("FINAL_COUNT", functionCall("count", symbol("PARTIAL_COUNT"))),
+                                        aggregate(ImmutableMap.of("FINAL_COUNT", functionCall("count", ImmutableList.of("PARTIAL_COUNT"))),
                                                 any(
-                                                        aggregate(ImmutableMap.of("PARTIAL_COUNT", functionCall("count", symbol("NON_NULL"))),
+                                                        aggregate(ImmutableMap.of("PARTIAL_COUNT", functionCall("count", ImmutableList.of("NON_NULL"))),
                                                                 any(
                                                                         join(LEFT, ImmutableList.of(),
                                                                                 any(

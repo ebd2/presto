@@ -41,7 +41,7 @@ final class JoinMatcher
     }
 
     @Override
-    public boolean downMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
+    public boolean downMatches(PlanNode node)
     {
         if (!(node instanceof JoinNode)) {
             return false;
@@ -54,7 +54,7 @@ final class JoinMatcher
     @Override
     public boolean upMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
     {
-        checkState(downMatches(node, session, metadata, expressionAliases));
+        checkState(downMatches(node));
 
         JoinNode joinNode = (JoinNode) node;
 

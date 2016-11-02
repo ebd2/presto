@@ -15,6 +15,7 @@ package com.facebook.presto.sql.planner.assertions;
 
 import com.facebook.presto.sql.planner.Symbol;
 import com.facebook.presto.sql.tree.Expression;
+import com.facebook.presto.sql.tree.SymbolReference;
 import com.google.common.collect.ImmutableMap;
 
 import java.util.HashMap;
@@ -41,6 +42,7 @@ public final class ExpressionAliases
 
     public void put(String alias, Expression expression)
     {
+        checkState(expression instanceof SymbolReference, "%s is not a symbol reference", expression);
         alias = toKey(alias);
         checkState(!map.containsKey(alias), "Alias '%s' already bound to expression '%s'. Tried to rebind to '%s'", alias, map.get(alias), expression);
         checkState(!map.values().contains(expression), "Expression '%s' is already bound in %s. Tried to rebind as '%s'.", expression, map, alias);

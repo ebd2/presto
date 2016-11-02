@@ -37,7 +37,7 @@ final class SemiJoinMatcher
     }
 
     @Override
-    public boolean downMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
+    public boolean downMatches(PlanNode node)
     {
         return node instanceof SemiJoinNode;
     }
@@ -45,7 +45,7 @@ final class SemiJoinMatcher
     @Override
     public boolean upMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
     {
-        checkState(downMatches(node, session, metadata, expressionAliases));
+        checkState(downMatches(node));
 
         SemiJoinNode semiJoinNode = (SemiJoinNode) node;
         if (!(expressionAliases.get(sourceSymbolAlias).equals(semiJoinNode.getSourceJoinSymbol().toSymbolReference()) &&

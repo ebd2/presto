@@ -30,7 +30,6 @@ import com.facebook.presto.sql.planner.plan.TableScanNode;
 import com.facebook.presto.sql.tree.Expression;
 import com.facebook.presto.sql.tree.FunctionCall;
 import com.facebook.presto.sql.tree.QualifiedName;
-import com.facebook.presto.sql.tree.SymbolReference;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 
@@ -38,7 +37,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 
 import static com.facebook.presto.sql.ExpressionUtils.rewriteQualifiedNamesToSymbolReferences;
@@ -155,70 +153,27 @@ public final class PlanMatchPattern
         return node(JoinNode.class, left, right).with(new JoinMatcher(joinType, expectedEquiCriteria));
     }
 
-    public static class MagicSymbol
+    private static class SymbolAlias
     {
         private final String alias;
 
-        private MagicSymbol(String alias)
+        private SymbolAlias(String alias)
         {
             this.alias = requireNonNull(alias, "alias is null");
         }
 
         Symbol toSymbol(ExpressionAliases aliases)
         {
-            return new AliasedSymbol(alias, aliases);
-        }
-
-        private static class AliasedSymbol
-                extends Symbol
-        {
-            private final String alias;
-            private final ExpressionAliases expressionAliases;
-
-            private AliasedSymbol(String alias, ExpressionAliases expressionAliases)
-            {
-                super(alias);
-                this.alias = requireNonNull(alias, "alias is null");
-                this.expressionAliases = requireNonNull(expressionAliases, "expressionAliases is null");
-            }
-
-            public String getName()
-            {
-                Expression value = expressionAliases.get(alias);
-                checkState(value instanceof SymbolReference, "%s is not a SymbolReference", value);
-                return ((SymbolReference) value).getName();
-            }
-
-            @Override
-            public boolean equals(Object obj)
-            {
-                if (this == obj) {
-                    return true;
-                }
-
-                if (obj == null || !(obj instanceof Symbol)) {
-                    return false;
-                }
-
-                Symbol other = (Symbol) obj;
-
-                return Objects.equals(getName(), other.getName());
-            }
-
-            @Override
-            public int hashCode()
-            {
-                return getName().hashCode();
-            }
+            return Symbol.from(aliases.get(alias));
         }
     }
 
     static class EquiMaker
     {
-        MagicSymbol left;
-        MagicSymbol right;
+        SymbolAlias left;
+        SymbolAlias right;
 
-        private EquiMaker(MagicSymbol left, MagicSymbol right)
+        private EquiMaker(SymbolAlias left, SymbolAlias right)
         {
             this.left = requireNonNull(left, "left is null");
             this.right = requireNonNull(right, "right is null");
@@ -233,9 +188,9 @@ public final class PlanMatchPattern
     static class FunctionCallMaker
     {
         QualifiedName name;
-        List<MagicSymbol> args;
+        List<SymbolAlias> args;
 
-        private FunctionCallMaker(QualifiedName name, List<MagicSymbol> args)
+        private FunctionCallMaker(QualifiedName name, List<SymbolAlias> args)
         {
             this.name = requireNonNull(name, "name is null");
             this.args = requireNonNull(args, "args is null");
@@ -254,12 +209,12 @@ public final class PlanMatchPattern
 
     public static EquiMaker equiJoinClause(String left, String right)
     {
-        return new EquiMaker(new MagicSymbol(left), new MagicSymbol(right));
+        return new EquiMaker(new SymbolAlias(left), new SymbolAlias(right));
     }
 
-    public static MagicSymbol symbol(String alias)
+    public static SymbolAlias symbol(String alias)
     {
-        return new MagicSymbol(alias);
+        return new SymbolAlias(alias);
     }
 
     public static PlanMatchPattern filter(String predicate, PlanMatchPattern source)
@@ -292,7 +247,7 @@ public final class PlanMatchPattern
                 states.add(new PlanMatchingState(ImmutableList.of(this), expressionAliases));
             }
         }
-        if (node.getSources().size() == sourcePatterns.size() && matchers.stream().allMatch(it -> it.downMatches(node, session, metadata, expressionAliases))) {
+        if (node.getSources().size() == sourcePatterns.size() && matchers.stream().allMatch(it -> it.downMatches(node))) {
             states.add(new PlanMatchingState(sourcePatterns, expressionAliases));
         }
         return states.build();
@@ -309,13 +264,13 @@ public final class PlanMatchPattern
         return this;
     }
 
-    public PlanMatchPattern withAlias(String alias, HackMatcher matcher)
+    public PlanMatchPattern withAlias(String alias, RvalueMatcher matcher)
     {
         matchers.add(new Alias(alias, matcher));
         return this;
     }
 
-    public static HackMatcher columnReference(String tableName, String columnName)
+    public static RvalueMatcher columnReference(String tableName, String columnName)
     {
         return new ColumnReference(tableName, columnName);
     }
@@ -342,9 +297,14 @@ public final class PlanMatchPattern
         return sourcePatterns.isEmpty();
     }
 
-    public static FunctionCallMaker functionCall(String name, MagicSymbol... args)
+    public static FunctionCallMaker functionCall(String name, List<String> args)
     {
-        return new FunctionCallMaker(QualifiedName.of(name), Arrays.asList(args));
+        List<SymbolAlias> symbolArgs = args
+                .stream()
+                .map(PlanMatchPattern::symbol)
+                .collect(toImmutableList());
+
+        return new FunctionCallMaker(QualifiedName.of(name), symbolArgs);
     }
 
     @Override

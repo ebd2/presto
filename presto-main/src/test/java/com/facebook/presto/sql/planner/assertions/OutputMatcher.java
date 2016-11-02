@@ -35,7 +35,7 @@ public class OutputMatcher
     }
 
     @Override
-    public boolean downMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
+    public boolean downMatches(PlanNode node)
     {
         return true;
     }

@@ -52,8 +52,6 @@ final class PlanMatchingVisitor
         List<Symbol> inputs = allInputs.get(0);
         List<Symbol> outputs = node.getOutputSymbols();
 
-        checkState(inputs.size() == outputs.size(), "Inputs/outputs size mismatch");
-
         ImmutableMap.Builder<Symbol, Expression> assignments = ImmutableMap.builder();
         for (int i = 0; i < inputs.size(); ++i) {
             assignments.put(outputs.get(i), inputs.get(i).toSymbolReference());
@@ -92,7 +90,7 @@ final class PlanMatchingVisitor
                     continue;
                 }
                 if (context.getPattern().upMatches(node, session, metadata, context.getExpressionAliases())) {
-                    terminatedUpMatchCount++;
+                    ++terminatedUpMatchCount;
                 }
             }
 
@@ -100,6 +98,7 @@ final class PlanMatchingVisitor
             return terminatedUpMatchCount == 1;
         }
 
+        int upMatchCount = 0;
         for (PlanMatchingState state : states) {
             checkState(node.getSources().size() == state.getPatterns().size(), "Matchers count does not match count of sources");
             int i = 0;
@@ -115,10 +114,11 @@ final class PlanMatchingVisitor
             }
             if (sourcesMatch && context.getPattern().upMatches(node, session, metadata, stateAliases)) {
                 context.getExpressionAliases().putSourceAliases(stateAliases);
-                return true;
+                ++upMatchCount;
             }
         }
-        return false;
+        checkState(upMatchCount < 2, format("Ambiguous detail match on node %s", node));
+        return upMatchCount == 1;
     }
 
     private List<PlanMatchingState> filterTerminated(List<PlanMatchingState> states)

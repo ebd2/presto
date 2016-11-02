@@ -30,7 +30,7 @@ import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 
 public class ColumnReference
-    implements HackMatcher
+    implements RvalueMatcher
 {
     private final String tableName;
     private final String columnName;
@@ -42,7 +42,7 @@ public class ColumnReference
     }
 
     @Override
-    public Optional<Symbol> getSymbol(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
+    public Optional<Symbol> getAssignedSymbol(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
     {
         if (!(node instanceof TableScanNode)) {
             return Optional.empty();

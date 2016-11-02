@@ -27,7 +27,7 @@ import static com.google.common.base.Preconditions.checkState;
 import static java.util.Objects.requireNonNull;
 
 public class AggregationFunctionMatcher
-        implements HackMatcher
+        implements RvalueMatcher
 {
     PlanMatchPattern.FunctionCallMaker callMaker;
 
@@ -37,7 +37,7 @@ public class AggregationFunctionMatcher
     }
 
     @Override
-    public Optional<Symbol> getSymbol(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
+    public Optional<Symbol> getAssignedSymbol(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
     {
         Optional<Symbol> result = Optional.empty();
         if (!(node instanceof AggregationNode)) {

@@ -48,7 +48,7 @@ final class TableScanMatcher
     }
 
     @Override
-    public boolean downMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
+    public boolean downMatches(PlanNode node)
     {
         return node instanceof TableScanNode;
     }
@@ -56,7 +56,7 @@ final class TableScanMatcher
     @Override
     public boolean upMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
     {
-        checkState(downMatches(node, session, metadata, expressionAliases));
+        checkState(downMatches(node));
         TableScanNode tableScanNode = (TableScanNode) node;
         TableMetadata tableMetadata = metadata.getTableMetadata(session, tableScanNode.getTable());
         String actualTableName = tableMetadata.getTable().getTableName();

@@ -31,7 +31,7 @@ import static com.google.common.base.Preconditions.checkState;
 import static java.util.Objects.requireNonNull;
 
 public class ExpressionAssignment
-    implements HackMatcher
+    implements RvalueMatcher
 {
     private final SqlParser parser = new SqlParser();
     private final String sql;
@@ -49,7 +49,7 @@ public class ExpressionAssignment
     }
 
     @Override
-    public Optional<Symbol> getSymbol(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
+    public Optional<Symbol> getAssignedSymbol(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
     {
         Optional<Symbol> result = Optional.empty();
         ImmutableList.Builder<Expression> matchesBuilder = ImmutableList.builder();

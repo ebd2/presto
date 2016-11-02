@@ -27,16 +27,16 @@ public class Alias
     implements Matcher
 {
     private final String alias;
-    private final HackMatcher matcher;
+    private final RvalueMatcher matcher;
 
-    public Alias(String alias, HackMatcher matcher)
+    public Alias(String alias, RvalueMatcher matcher)
     {
         this.alias = requireNonNull(alias, "alias is null");
         this.matcher = requireNonNull(matcher, "matcher is null");
     }
 
     @Override
-    public boolean downMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
+    public boolean downMatches(PlanNode node)
     {
         return true;
     }
@@ -48,7 +48,7 @@ public class Alias
     @Override
     public boolean upMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
     {
-        Optional<Symbol> symbol = matcher.getSymbol(node, session, metadata, expressionAliases);
+        Optional<Symbol> symbol = matcher.getAssignedSymbol(node, session, metadata, expressionAliases);
         if (symbol.isPresent()) {
             expressionAliases.put(alias, symbol.get().toSymbolReference());
         }

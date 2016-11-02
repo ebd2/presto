@@ -22,11 +22,11 @@ import com.google.common.collect.ImmutableMap;
 import static com.facebook.presto.testing.TestingSession.testSessionBuilder;
 import static org.testng.Assert.fail;
 
-public class BasePlanDslTest
+public class BasePlanTest
 {
     private final LocalQueryRunner queryRunner;
 
-    public BasePlanDslTest()
+    public BasePlanTest()
     {
         this.queryRunner = new LocalQueryRunner(testSessionBuilder()
                 .setCatalog("local")

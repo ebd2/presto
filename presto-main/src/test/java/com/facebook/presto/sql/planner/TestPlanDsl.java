@@ -13,8 +13,8 @@
  */
 package com.facebook.presto.sql.planner;
 
-import com.facebook.presto.sql.planner.assertions.BasePlanDslTest;
-import com.facebook.presto.sql.planner.assertions.HackMatcher;
+import com.facebook.presto.sql.planner.assertions.BasePlanTest;
+import com.facebook.presto.sql.planner.assertions.RvalueMatcher;
 import com.facebook.presto.sql.planner.plan.OutputNode;
 import com.facebook.presto.sql.planner.plan.TableScanNode;
 import com.google.common.collect.ImmutableList;
@@ -36,9 +36,9 @@ import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.symbol
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.tableScan;
 import static com.facebook.presto.sql.planner.plan.JoinNode.Type.INNER;
 
-public class TestPlanDsl extends BasePlanDslTest
+public class TestPlanDsl extends BasePlanTest
 {
-    private final HackMatcher lineitemOrderkeyColumn;
+    private final RvalueMatcher lineitemOrderkeyColumn;
 
     public TestPlanDsl()
     {
@@ -128,9 +128,9 @@ public class TestPlanDsl extends BasePlanDslTest
     {
         assertPlan("SELECT COUNT(nationkey) FROM nation",
                 output(ImmutableList.of("FINAL_COUNT"),
-                        aggregate(ImmutableMap.of("FINAL_COUNT", functionCall("count", symbol("PARTIAL_COUNT"))),
+                        aggregate(ImmutableMap.of("FINAL_COUNT", functionCall("count", ImmutableList.of("PARTIAL_COUNT"))),
                                 any(
-                                        aggregate(ImmutableMap.of("PARTIAL_COUNT", functionCall("count", symbol("NATIONKEY"))),
+                                        aggregate(ImmutableMap.of("PARTIAL_COUNT", functionCall("count", ImmutableList.of("NATIONKEY"))),
                                                 tableScan("nation", ImmutableMap.of("NATIONKEY", "nationkey")))))));
     }
 
