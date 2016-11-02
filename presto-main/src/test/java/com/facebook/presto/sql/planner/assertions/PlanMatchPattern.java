@@ -17,7 +17,6 @@ import com.facebook.presto.Session;
 import com.facebook.presto.metadata.Metadata;
 import com.facebook.presto.spi.predicate.Domain;
 import com.facebook.presto.sql.parser.SqlParser;
-import com.facebook.presto.sql.planner.Symbol;
 import com.facebook.presto.sql.planner.plan.AggregationNode;
 import com.facebook.presto.sql.planner.plan.ApplyNode;
 import com.facebook.presto.sql.planner.plan.FilterNode;
@@ -34,7 +33,6 @@ import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -110,7 +108,7 @@ public final class PlanMatchPattern
         return this;
     }
 
-    public static PlanMatchPattern aggregate(Map<String, FunctionCallMaker> assignments, PlanMatchPattern source)
+    public static PlanMatchPattern aggregate(Map<String, ExpectedValueProvider<FunctionCall>> assignments, PlanMatchPattern source)
     {
         PlanMatchPattern result = node(AggregationNode.class, source);
         assignments.entrySet().forEach(
@@ -148,68 +146,14 @@ public final class PlanMatchPattern
         return node(SemiJoinNode.class, source, filtering).with(new SemiJoinMatcher(sourceSymbolAlias, filteringSymbolAlias, outputAlias));
     }
 
-    public static PlanMatchPattern join(JoinNode.Type joinType, List<EquiMaker> expectedEquiCriteria, PlanMatchPattern left, PlanMatchPattern right)
+    public static PlanMatchPattern join(JoinNode.Type joinType, List<ExpectedValueProvider<JoinNode.EquiJoinClause>> expectedEquiCriteria, PlanMatchPattern left, PlanMatchPattern right)
     {
         return node(JoinNode.class, left, right).with(new JoinMatcher(joinType, expectedEquiCriteria));
     }
 
-    private static class SymbolAlias
+    public static ExpectedValueProvider<JoinNode.EquiJoinClause> equiJoinClause(String left, String right)
     {
-        private final String alias;
-
-        private SymbolAlias(String alias)
-        {
-            this.alias = requireNonNull(alias, "alias is null");
-        }
-
-        Symbol toSymbol(ExpressionAliases aliases)
-        {
-            return Symbol.from(aliases.get(alias));
-        }
-    }
-
-    static class EquiMaker
-    {
-        SymbolAlias left;
-        SymbolAlias right;
-
-        private EquiMaker(SymbolAlias left, SymbolAlias right)
-        {
-            this.left = requireNonNull(left, "left is null");
-            this.right = requireNonNull(right, "right is null");
-        }
-
-        JoinNode.EquiJoinClause rehydrate(ExpressionAliases aliases)
-        {
-            return new JoinNode.EquiJoinClause(left.toSymbol(aliases), right.toSymbol(aliases));
-        }
-    }
-
-    static class FunctionCallMaker
-    {
-        QualifiedName name;
-        List<SymbolAlias> args;
-
-        private FunctionCallMaker(QualifiedName name, List<SymbolAlias> args)
-        {
-            this.name = requireNonNull(name, "name is null");
-            this.args = requireNonNull(args, "args is null");
-        }
-
-        FunctionCall rehydrate(ExpressionAliases aliases)
-        {
-            List<Expression> symbolArgs = args
-                    .stream()
-                    .map(arg -> arg.toSymbol(aliases).toSymbolReference())
-                    .collect(toImmutableList());
-
-            return new FunctionCall(name, symbolArgs);
-        }
-    }
-
-    public static EquiMaker equiJoinClause(String left, String right)
-    {
-        return new EquiMaker(new SymbolAlias(left), new SymbolAlias(right));
+        return new EquiJoinClauseProvider(new SymbolAlias(left), new SymbolAlias(right));
     }
 
     public static SymbolAlias symbol(String alias)
@@ -297,14 +241,14 @@ public final class PlanMatchPattern
         return sourcePatterns.isEmpty();
     }
 
-    public static FunctionCallMaker functionCall(String name, List<String> args)
+    public static ExpectedValueProvider<FunctionCall> functionCall(String name, List<String> args)
     {
         List<SymbolAlias> symbolArgs = args
                 .stream()
                 .map(PlanMatchPattern::symbol)
                 .collect(toImmutableList());
 
-        return new FunctionCallMaker(QualifiedName.of(name), symbolArgs);
+        return new FunctionCallProvider(QualifiedName.of(name), symbolArgs);
     }
 
     @Override

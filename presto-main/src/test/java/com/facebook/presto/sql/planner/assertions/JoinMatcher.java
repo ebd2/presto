@@ -32,9 +32,9 @@ final class JoinMatcher
         implements Matcher
 {
     private final JoinNode.Type joinType;
-    private final List<PlanMatchPattern.EquiMaker> equiCriteria;
+    private final List<ExpectedValueProvider<JoinNode.EquiJoinClause>> equiCriteria;
 
-    JoinMatcher(JoinNode.Type joinType, List<PlanMatchPattern.EquiMaker> equiCriteria)
+    JoinMatcher(JoinNode.Type joinType, List<ExpectedValueProvider<JoinNode.EquiJoinClause>> equiCriteria)
     {
         this.joinType = requireNonNull(joinType, "joinType is null");
         this.equiCriteria = requireNonNull(equiCriteria, "equiCriteria is null");
@@ -69,7 +69,7 @@ final class JoinMatcher
         Set<JoinNode.EquiJoinClause> actual = ImmutableSet.copyOf(joinNode.getCriteria());
         Set<JoinNode.EquiJoinClause> expected =
                 equiCriteria.stream()
-                .map(maker -> maker.rehydrate(expressionAliases))
+                .map(maker -> maker.getExpectedValue(expressionAliases))
                 .collect(toImmutableSet());
 
         return expected.equals(actual);

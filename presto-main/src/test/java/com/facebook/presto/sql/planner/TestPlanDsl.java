@@ -32,7 +32,6 @@ import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.join;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.node;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.output;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.project;
-import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.symbol;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.tableScan;
 import static com.facebook.presto.sql.planner.plan.JoinNode.Type.INNER;
 

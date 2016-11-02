@@ -29,9 +29,9 @@ import static java.util.Objects.requireNonNull;
 public class AggregationFunctionMatcher
         implements RvalueMatcher
 {
-    PlanMatchPattern.FunctionCallMaker callMaker;
+    ExpectedValueProvider<FunctionCall> callMaker;
 
-    public AggregationFunctionMatcher(PlanMatchPattern.FunctionCallMaker callMaker)
+    public AggregationFunctionMatcher(ExpectedValueProvider<FunctionCall> callMaker)
     {
         this.callMaker = requireNonNull(callMaker, "functionCall is null");
     }
@@ -46,7 +46,7 @@ public class AggregationFunctionMatcher
 
         AggregationNode aggregationNode = (AggregationNode) node;
 
-        FunctionCall expectedCall = callMaker.rehydrate(expressionAliases);
+        FunctionCall expectedCall = callMaker.getExpectedValue(expressionAliases);
         for (Map.Entry<Symbol, FunctionCall> assignment : aggregationNode.getAggregations().entrySet()) {
             if (expectedCall.equals(assignment.getValue())) {
                 checkState(!result.isPresent(), "Ambiguous function calls in %s", aggregationNode);
