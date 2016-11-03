@@ -15,8 +15,10 @@ package com.facebook.presto.sql.planner.assertions;
 
 import com.facebook.presto.Session;
 import com.facebook.presto.metadata.Metadata;
+import com.facebook.presto.spi.block.SortOrder;
 import com.facebook.presto.spi.predicate.Domain;
 import com.facebook.presto.sql.parser.SqlParser;
+import com.facebook.presto.sql.planner.Symbol;
 import com.facebook.presto.sql.planner.plan.AggregationNode;
 import com.facebook.presto.sql.planner.plan.ApplyNode;
 import com.facebook.presto.sql.planner.plan.FilterNode;
@@ -26,9 +28,12 @@ import com.facebook.presto.sql.planner.plan.PlanNode;
 import com.facebook.presto.sql.planner.plan.ProjectNode;
 import com.facebook.presto.sql.planner.plan.SemiJoinNode;
 import com.facebook.presto.sql.planner.plan.TableScanNode;
+import com.facebook.presto.sql.planner.plan.WindowNode;
 import com.facebook.presto.sql.tree.Expression;
 import com.facebook.presto.sql.tree.FunctionCall;
 import com.facebook.presto.sql.tree.QualifiedName;
+import com.facebook.presto.sql.tree.SymbolReference;
+import com.facebook.presto.sql.tree.WindowFrame;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 
@@ -39,6 +44,7 @@ import java.util.Optional;
 
 import static com.facebook.presto.sql.ExpressionUtils.rewriteQualifiedNamesToSymbolReferences;
 import static com.facebook.presto.util.ImmutableCollectors.toImmutableList;
+import static com.facebook.presto.util.ImmutableCollectors.toImmutableMap;
 import static com.google.common.base.Preconditions.checkState;
 import static java.util.Collections.nCopies;
 import static java.util.Objects.requireNonNull;
@@ -113,6 +119,28 @@ public final class PlanMatchPattern
         PlanMatchPattern result = node(AggregationNode.class, source);
         assignments.entrySet().forEach(
                 assignment -> result.withAlias(assignment.getKey(), new AggregationFunctionMatcher(assignment.getValue())));
+        return result;
+    }
+
+    public static PlanMatchPattern window(
+            ExpectedValueProvider<WindowNode.Specification> specification,
+            List<ExpectedValueProvider<FunctionCall>> windowFunctions,
+            PlanMatchPattern source)
+    {
+        PlanMatchPattern result = node(WindowNode.class, source).with(new WindowMatcher(specification));
+        windowFunctions.forEach(
+                function -> result.withAlias(Optional.empty(), new WindowFunctionMatcher(function)));
+        return result;
+    }
+
+    public static PlanMatchPattern window(
+            ExpectedValueProvider<WindowNode.Specification> specification,
+            Map<String, ExpectedValueProvider<FunctionCall>> assignments,
+            PlanMatchPattern source)
+    {
+        PlanMatchPattern result = node(WindowNode.class, source).with(new WindowMatcher(specification));
+        assignments.entrySet().forEach(
+                assignment -> result.withAlias(assignment.getKey(), new WindowFunctionMatcher(assignment.getValue())));
         return result;
     }
 
@@ -210,6 +238,11 @@ public final class PlanMatchPattern
 
     public PlanMatchPattern withAlias(String alias, RvalueMatcher matcher)
     {
+        return withAlias(Optional.of(alias), matcher);
+    }
+
+    public PlanMatchPattern withAlias(Optional<String> alias, RvalueMatcher matcher)
+    {
         matchers.add(new Alias(alias, matcher));
         return this;
     }
@@ -243,12 +276,51 @@ public final class PlanMatchPattern
 
     public static ExpectedValueProvider<FunctionCall> functionCall(String name, List<String> args)
     {
-        List<SymbolAlias> symbolArgs = args
+        return new FunctionCallProvider(QualifiedName.of(name), toSymbolAliases(args));
+    }
+
+    public static ExpectedValueProvider<FunctionCall> functionCall(
+            String name,
+            Optional<WindowFrame> frame,
+            List<String> args)
+    {
+        return new FunctionCallProvider(QualifiedName.of(name), frame, false, toSymbolAliases(args));
+    }
+
+    public static List<Expression> toSymbolReferences(List<SymbolAlias> aliases, ExpressionAliases expressionAliases)
+    {
+        return aliases
+                .stream()
+                .map(arg -> arg.toSymbol(expressionAliases).toSymbolReference())
+                .collect(toImmutableList());
+    }
+
+    private static List<SymbolAlias> toSymbolAliases(List<String> aliases)
+    {
+        return aliases
                 .stream()
                 .map(PlanMatchPattern::symbol)
                 .collect(toImmutableList());
+    }
 
-        return new FunctionCallProvider(QualifiedName.of(name), symbolArgs);
+    public static ExpectedValueProvider<WindowNode.Specification> specification(
+            List<String> partitionBy,
+            List<String> orderBy,
+            Map<String, SortOrder> orderings)
+    {
+        return new SpecificationProvider(
+                partitionBy
+                        .stream()
+                        .map(SymbolAlias::new)
+                        .collect(toImmutableList()),
+                orderBy
+                        .stream()
+                        .map(SymbolAlias::new)
+                        .collect(toImmutableList()),
+                orderings
+                        .entrySet()
+                        .stream()
+                        .collect(toImmutableMap(entry -> new SymbolAlias(entry.getKey()), Map.Entry::getValue)));
     }
 
     @Override

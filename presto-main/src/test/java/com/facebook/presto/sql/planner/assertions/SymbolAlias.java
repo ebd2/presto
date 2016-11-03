@@ -30,4 +30,10 @@ class SymbolAlias
     {
         return Symbol.from(aliases.get(alias));
     }
+
+    @Override
+    public String toString()
+    {
+        return alias;
+    }
 }

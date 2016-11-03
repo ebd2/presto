@@ -38,6 +38,11 @@ public class BasePlanTest
                 ImmutableMap.of());
     }
 
+    protected LocalQueryRunner getQueryRunner()
+    {
+        return queryRunner;
+    }
+
     protected void assertPlan(String sql, PlanMatchPattern pattern)
     {
         assertPlan(sql, LogicalPlanner.Stage.OPTIMIZED_AND_VALIDATED, pattern);

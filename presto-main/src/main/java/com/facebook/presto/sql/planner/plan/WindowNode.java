@@ -214,7 +214,6 @@ public class WindowNode
 
             Specification other = (Specification) obj;
 
-            // Changing this? Go change WindowMatcher.matches too.
             return Objects.equals(this.partitionBy, other.partitionBy) &&
                     Objects.equals(this.orderBy, other.orderBy) &&
                     Objects.equals(this.orderings, other.orderings);

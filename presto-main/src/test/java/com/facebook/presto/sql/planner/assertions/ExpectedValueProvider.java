@@ -13,7 +13,7 @@
  */
 package com.facebook.presto.sql.planner.assertions;
 
-interface ExpectedValueProvider<T>
+public interface ExpectedValueProvider<T>
 {
     T getExpectedValue(ExpressionAliases aliases);
 }

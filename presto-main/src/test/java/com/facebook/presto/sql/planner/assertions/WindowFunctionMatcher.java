@@ -16,8 +16,8 @@ package com.facebook.presto.sql.planner.assertions;
 import com.facebook.presto.Session;
 import com.facebook.presto.metadata.Metadata;
 import com.facebook.presto.sql.planner.Symbol;
-import com.facebook.presto.sql.planner.plan.AggregationNode;
 import com.facebook.presto.sql.planner.plan.PlanNode;
+import com.facebook.presto.sql.planner.plan.WindowNode;
 import com.facebook.presto.sql.tree.FunctionCall;
 
 import java.util.Map;
@@ -26,12 +26,12 @@ import java.util.Optional;
 import static com.google.common.base.Preconditions.checkState;
 import static java.util.Objects.requireNonNull;
 
-public class AggregationFunctionMatcher
+public class WindowFunctionMatcher
         implements RvalueMatcher
 {
     ExpectedValueProvider<FunctionCall> callMaker;
 
-    public AggregationFunctionMatcher(ExpectedValueProvider<FunctionCall> callMaker)
+    public WindowFunctionMatcher(ExpectedValueProvider<FunctionCall> callMaker)
     {
         this.callMaker = requireNonNull(callMaker, "functionCall is null");
     }
@@ -40,16 +40,16 @@ public class AggregationFunctionMatcher
     public Optional<Symbol> getAssignedSymbol(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
     {
         Optional<Symbol> result = Optional.empty();
-        if (!(node instanceof AggregationNode)) {
+        if (!(node instanceof WindowNode)) {
             return result;
         }
 
-        AggregationNode aggregationNode = (AggregationNode) node;
+        WindowNode windowNode = (WindowNode) node;
 
         FunctionCall expectedCall = callMaker.getExpectedValue(expressionAliases);
-        for (Map.Entry<Symbol, FunctionCall> assignment : aggregationNode.getAggregations().entrySet()) {
-            if (expectedCall.equals(assignment.getValue())) {
-                checkState(!result.isPresent(), "Ambiguous function calls in %s", aggregationNode);
+        for (Map.Entry<Symbol, WindowNode.Function> assignment : windowNode.getWindowFunctions().entrySet()) {
+            if (expectedCall.equals(assignment.getValue().getFunctionCall())) {
+                checkState(!result.isPresent(), "Ambiguous function calls in %s", windowNode);
                 result = Optional.of(assignment.getKey());
             }
         }

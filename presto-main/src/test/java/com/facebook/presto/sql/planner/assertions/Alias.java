@@ -26,10 +26,10 @@ import static java.util.Objects.requireNonNull;
 public class Alias
     implements Matcher
 {
-    private final String alias;
+    private final Optional<String> alias;
     private final RvalueMatcher matcher;
 
-    public Alias(String alias, RvalueMatcher matcher)
+    public Alias(Optional<String> alias, RvalueMatcher matcher)
     {
         this.alias = requireNonNull(alias, "alias is null");
         this.matcher = requireNonNull(matcher, "matcher is null");
@@ -49,8 +49,8 @@ public class Alias
     public boolean upMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
     {
         Optional<Symbol> symbol = matcher.getAssignedSymbol(node, session, metadata, expressionAliases);
-        if (symbol.isPresent()) {
-            expressionAliases.put(alias, symbol.get().toSymbolReference());
+        if (symbol.isPresent() && alias.isPresent()) {
+            expressionAliases.put(alias.get(), symbol.get().toSymbolReference());
         }
         return symbol.isPresent();
     }
