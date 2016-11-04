@@ -16,7 +16,6 @@ package com.facebook.presto.sql.planner.assertions;
 import com.facebook.presto.sql.tree.Expression;
 import com.facebook.presto.sql.tree.FunctionCall;
 import com.facebook.presto.sql.tree.QualifiedName;
-import com.facebook.presto.sql.tree.SymbolReference;
 import com.facebook.presto.sql.tree.WindowFrame;
 import com.google.common.base.Joiner;
 
@@ -25,8 +24,6 @@ import java.util.Objects;
 import java.util.Optional;
 
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.toSymbolReferences;
-import static com.facebook.presto.util.ImmutableCollectors.toImmutableList;
-import static com.google.common.base.Preconditions.checkState;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 
@@ -78,7 +75,7 @@ class FunctionCallProvider
     {
         private ExpectedWindowFunctionCall(List<Expression> args)
         {
-            super(name, args);
+            super(name, distinct, args);
         }
 
         @Override
