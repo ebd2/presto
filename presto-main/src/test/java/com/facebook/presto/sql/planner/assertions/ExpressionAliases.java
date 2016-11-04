@@ -60,6 +60,17 @@ public final class ExpressionAliases
     {
         alias = toKey(alias);
         Expression result = map.get(alias);
+        /*
+         * It's still kind of an open question if the right combination of anyTree() and
+         * a sufficiently complex and/or ambiguous plan might make throwing here a
+         * theoretically incorrect thing to do.
+         *
+         * If you run into a case that you think justifies changing this, please consider
+         * that it's already pretty hard to determine if a failure is because the test
+         * is written incorrectly or because the actual plan really doesn't match a
+         * correctly written test. Having this throw makes it a lot easier to track down
+         * missing aliases in incorrect plans.
+         */
         checkState(result != null, format("missing expression for alias %s", alias));
         return result;
     }
