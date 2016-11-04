@@ -25,7 +25,6 @@ import com.facebook.presto.sql.planner.plan.WindowNode;
 import com.facebook.presto.sql.tree.FrameBound;
 import com.facebook.presto.sql.tree.WindowFrame;
 import com.facebook.presto.testing.LocalQueryRunner;
-import com.facebook.presto.testing.QueryRunner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import org.intellij.lang.annotations.Language;
@@ -37,7 +36,6 @@ import java.util.Optional;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.any;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.anyNot;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.anyTree;
-import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.equiJoinClause;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.filter;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.functionCall;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.join;
@@ -61,7 +59,6 @@ public class TestMergeWindows extends BasePlanTest
                     SUPPKEY_ALIAS, "suppkey",
                     ORDERKEY_ALIAS, "orderkey",
                     SHIPDATE_ALIAS, "shipdate"));
-
 
     private static final Optional<WindowFrame> COMMON_FRAME = Optional.of(new WindowFrame(
         WindowFrame.Type.ROWS,
@@ -317,9 +314,9 @@ public class TestMergeWindows extends BasePlanTest
     @Test
     public void testNotMergeAcrossJoinBranches()
     {
-        String RORDERKEY_ALIAS = "R_ORDERKEY";
-        String RSHIPDATE_ALIAS = "R_SHIPDATE";
-        String RQUANTITY_ALIAS = "R_QUANTITY";
+        String rOrderkeyAlias = "R_ORDERKEY";
+        String rShipdateAlias = "R_SHIPDATE";
+        String rQuantityAlias = "R_QUANTITY";
 
         @Language("SQL") String sql = "WITH foo AS (" +
                 "SELECT " +
@@ -341,9 +338,9 @@ public class TestMergeWindows extends BasePlanTest
                 ImmutableMap.of(SHIPDATE_ALIAS, SortOrder.ASC_NULLS_LAST, QUANTITY_ALIAS, SortOrder.DESC_NULLS_LAST));
 
         ExpectedValueProvider<WindowNode.Specification> rightSpecification = specification(
-                ImmutableList.of(RORDERKEY_ALIAS),
-                ImmutableList.of(RSHIPDATE_ALIAS, RQUANTITY_ALIAS),
-                ImmutableMap.of(RSHIPDATE_ALIAS, SortOrder.ASC_NULLS_LAST, RQUANTITY_ALIAS, SortOrder.DESC_NULLS_LAST));
+                ImmutableList.of(rOrderkeyAlias),
+                ImmutableList.of(rShipdateAlias, rQuantityAlias),
+                ImmutableMap.of(rShipdateAlias, SortOrder.ASC_NULLS_LAST, rQuantityAlias, SortOrder.DESC_NULLS_LAST));
 
         ImmutableMap.Builder<String, String> leftBuilder = ImmutableMap.builder();
         leftBuilder.put(DISCOUNT_ALIAS, "discount");
@@ -357,11 +354,11 @@ public class TestMergeWindows extends BasePlanTest
 
         ImmutableMap.Builder<String, String> rightBuilder = ImmutableMap.builder();
 
-        rightBuilder.put(RORDERKEY_ALIAS, "orderkey");
+        rightBuilder.put(rOrderkeyAlias, "orderkey");
         rightBuilder.put("R_PARTKEY", "partkey");
         rightBuilder.put("R_SUPPKEY", "suppkey");
-        rightBuilder.put(RQUANTITY_ALIAS, "quantity");
-        rightBuilder.put(RSHIPDATE_ALIAS, "shipdate");
+        rightBuilder.put(rQuantityAlias, "quantity");
+        rightBuilder.put(rShipdateAlias, "shipdate");
 
         PlanMatchPattern rightTableScan = tableScan("lineitem", rightBuilder.build());
 
@@ -374,7 +371,7 @@ public class TestMergeWindows extends BasePlanTest
                                                         any(
                                                                 leftTableScan))),
                                         any(
-                                                window(rightSpecification, ImmutableMap.of("AVG", functionCall("avg", COMMON_FRAME, ImmutableList.of(RQUANTITY_ALIAS))),
+                                                window(rightSpecification, ImmutableMap.of("AVG", functionCall("avg", COMMON_FRAME, ImmutableList.of(rQuantityAlias))),
                                                         any(
                                                                 rightTableScan)))))));
     }
