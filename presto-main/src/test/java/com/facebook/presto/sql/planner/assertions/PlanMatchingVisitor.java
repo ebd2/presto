@@ -77,7 +77,7 @@ final class PlanMatchingVisitor
     @Override
     protected Boolean visitPlan(PlanNode node, PlanMatchingContext context)
     {
-        List<PlanMatchingState> states = context.getPattern().downMatches(node, session, metadata, context.getExpressionAliases());
+        List<PlanMatchingState> states = context.getPattern().downMatches(node, context.getExpressionAliases());
 
         if (states.isEmpty()) {
             return false;

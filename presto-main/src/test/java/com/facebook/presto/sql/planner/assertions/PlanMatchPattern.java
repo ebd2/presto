@@ -207,7 +207,7 @@ public final class PlanMatchPattern
         this.sourcePatterns = ImmutableList.copyOf(sourcePatterns);
     }
 
-    List<PlanMatchingState> downMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
+    List<PlanMatchingState> downMatches(PlanNode node, ExpressionAliases expressionAliases)
     {
         ImmutableList.Builder<PlanMatchingState> states = ImmutableList.builder();
         if (anyTree) {
