@@ -54,7 +54,7 @@ final class JoinMatcher
     @Override
     public boolean upMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
     {
-        checkState(downMatches(node));
+        checkState(downMatches(node), "DSL framework error: downMatches returned false in upMatches in %s", this.getClass().getName());
 
         JoinNode joinNode = (JoinNode) node;
 

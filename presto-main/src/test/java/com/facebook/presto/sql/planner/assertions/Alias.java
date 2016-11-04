@@ -43,7 +43,7 @@ public class Alias
 
     /*
      * Add aliases on the way back up the tree. Adding them on the way down would put them in the expressionAliases
-     * for matchers that run against the node sources, which would be incorrect.
+     * for matchers that run against the node's sources, which would be incorrect.
      */
     @Override
     public boolean upMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
