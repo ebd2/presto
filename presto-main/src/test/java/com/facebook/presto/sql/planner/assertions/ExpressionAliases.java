@@ -81,16 +81,77 @@ public final class ExpressionAliases
         return alias.toLowerCase();
     }
 
-    public void updateAssignments(Map<Symbol, Expression> assignments)
+    private Map<String, Expression> getUpdatedAssignments(Map<Symbol, Expression> assignments)
     {
         ImmutableMap.Builder<String, Expression> mapUpdate = ImmutableMap.builder();
         for (Map.Entry<Symbol, Expression> assignment : assignments.entrySet()) {
             for (Map.Entry<String, Expression> existingAlias : map.entrySet()) {
+                // Simple symbol rename
                 if (assignment.getValue().equals(existingAlias.getValue())) {
                     mapUpdate.put(existingAlias.getKey(), assignment.getKey().toSymbolReference());
                 }
+
+                /*
+                 * Special case for nodes that we can alias symbols in the node's assignment map.
+                 * In this case, we've already added the alias in the map, but we won't include it
+                 * as a simple rename as covered above. Add the existing alias to the result if
+                 * the LHS of the assignment matches the symbol reference of the existing alias.
+                 *
+                 * This comes up when we alias expressions in project nodes for use further up the tree.
+                 * At the beginning for the function, map contains { NEW_ALIAS: SymbolReference("expr_2" }
+                 * and the assignments map contains { expr_2 := <some expression> }.
+                 */
+                else if (assignment.getKey().toSymbolReference().equals(existingAlias.getValue())) {
+                    mapUpdate.put(existingAlias.getKey(), existingAlias.getValue());
+                }
             }
         }
-        map.putAll(mapUpdate.build());
+        return mapUpdate.build();
+    }
+
+    /*
+     * Update assigments in ExpressionAliases.map based on assignments given that
+     * assignments is a map of newSymbol := oldSymbolReference. RETAIN aliases for
+     * SymbolReferences that aren't in assignments.values()
+     *
+     * Example:
+     * ExpressionAliases.map = { "ALIAS": SymbolReference("foo") }
+     * updateAssignments({"bar": SymbolReference("foo")})
+     * results in
+     * ExpressionAliases.map = { "ALIAS": SymbolReference("bar") }
+     */
+    public void updateAssignments(Map<Symbol, Expression> assignments)
+    {
+        Map<String, Expression> additions = getUpdatedAssignments(assignments);
+        map.putAll(additions);
+    }
+
+    /*
+     * Update assigments in ExpressionAliases.map based on assignments given that
+     * assignments is a map of newSymbol := oldSymbolReference. DISCARD aliases for
+     * SymbolReferences that aren't in assignments.values()
+     *
+     * When you pass through a project node, all of the aliases need to be updated, and
+     * aliases for symbols that aren't projected need to be removed.
+     *
+     * Example:
+     * PlanMatchPattern.tableScan("nation", ImmutableMap.of("NK", "nationkey", "RK", "regionkey")
+     * applied to
+     * TableScanNode { col1 := ColumnHandle(nation, nationkey), col2 := ColumnHandle(nation, regionkey) }
+     * gives ExpressionAliases.map
+     * { "NK": SymbolReference("col1"), "RK": SymbolReference("col2") }
+     *
+     * ... Visit some other nodes, one of which presumably consumes col1, and none of which add any new aliases ...
+     *
+     * If we then visit a project node
+     * Project { value3 := col2 }
+     * ExpressionAliases.map should be
+     * { "RK": SymbolReference("value3") }
+     */
+    public void replaceAssignments(Map<Symbol, Expression> assignments)
+    {
+        Map<String, Expression> newAssignments = getUpdatedAssignments(assignments);
+        map.clear();
+        map.putAll(newAssignments);
     }
 }

@@ -98,6 +98,15 @@ public class TestPlanDsl extends BasePlanTest
     }
 
     @Test
+    public void testAliasExpressionFromProject()
+    {
+        assertPlan("SELECT 1 + orderkey FROM lineitem",
+                output(ImmutableList.of("EXPRESSION"),
+                        project(ImmutableMap.of("EXPRESSION", expression("1 + ORDERKEY")),
+                                tableScan("lineitem", ImmutableMap.of("ORDERKEY", "orderkey")))));
+    }
+
+    @Test
     public void testTableScan()
     {
         assertPlan("SELECT orderkey FROM lineitem",
@@ -106,7 +115,7 @@ public class TestPlanDsl extends BasePlanTest
     }
 
     @Test
-    public void testMagic()
+    public void testJoinMatcher()
     {
         assertPlan("SELECT o.orderkey FROM orders o, lineitem l WHERE l.orderkey = o.orderkey",
                 anyTree(
@@ -162,5 +171,14 @@ public class TestPlanDsl extends BasePlanTest
         assertPlan("SELECT orderkey FROM lineitem",
                 output(ImmutableList.of("ORDERKEY", "TWO"),
                         tableScan("lineitem", ImmutableMap.of("FIRST", "orderkey", "SECOND", "orderkey"))));
+    }
+
+    @Test(expectedExceptions = { IllegalStateException.class }, expectedExceptionsMessageRegExp = "missing expression for alias .*")
+    public void testProjectLimitsScope()
+    {
+        assertPlan("SELECT 1 + orderkey FROM lineitem",
+                output(ImmutableList.of("ORDERKEY"),
+                        project(ImmutableMap.of("EXPRESSION", expression("1 + ORDERKEY")),
+                                tableScan("lineitem", ImmutableMap.of("ORDERKEY", "orderkey")))));
     }
 }

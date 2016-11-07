@@ -25,7 +25,6 @@ import com.google.common.collect.ImmutableMap;
 
 import java.util.List;
 
-import static com.facebook.presto.util.ImmutableCollectors.toImmutableList;
 import static com.google.common.base.Preconditions.checkState;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
@@ -47,7 +46,7 @@ final class PlanMatchingVisitor
     {
         checkState(node.getType() == ExchangeNode.Type.GATHER, "Only GATHER is supported");
         List<List<Symbol>> allInputs = node.getInputs();
-        checkState(allInputs.size() == 1, "I don't know what to do with all these inputs");
+        checkState(allInputs.size() == 1, "Multiple lists of inputs are not supported yet");
 
         List<Symbol> inputs = allInputs.get(0);
         List<Symbol> outputs = node.getOutputSymbols();
@@ -69,7 +68,7 @@ final class PlanMatchingVisitor
     {
         boolean result = super.visitProject(node, context);
         if (result) {
-            context.getExpressionAliases().updateAssignments(node.getAssignments());
+            context.getExpressionAliases().replaceAssignments(node.getAssignments());
         }
         return result;
     }
@@ -79,16 +78,32 @@ final class PlanMatchingVisitor
     {
         List<PlanMatchingState> states = context.getPattern().downMatches(node, context.getExpressionAliases());
 
+        /*
+         * No shape match; don't need to check the internals of any of the nodes.
+         */
         if (states.isEmpty()) {
             return false;
         }
 
+        /*
+         * Leaf node in the plan.
+         */
         if (node.getSources().isEmpty()) {
             int terminatedUpMatchCount = 0;
             for (PlanMatchingState state : states) {
+                /*
+                 * Don't consider un-terminated PlanMatchingStates.
+                 */
                 if (!state.isTerminated()) {
                     continue;
                 }
+
+                /*
+                 * We have to call upMatches for two reasons:
+                 * 1) Make sure there aren't any mismatches checking the internals of a leaf node.
+                 * 2) Calling upMatches has the side-effect of adding aliases to the context's
+                 *    ExpressionAliases. They'll be needed further up.
+                 */
                 if (context.getPattern().upMatches(node, session, metadata, context.getExpressionAliases())) {
                     ++terminatedUpMatchCount;
                 }
@@ -103,15 +118,33 @@ final class PlanMatchingVisitor
             checkState(node.getSources().size() == state.getPatterns().size(), "Matchers count does not match count of sources");
             int i = 0;
             boolean sourcesMatch = true;
+
+            /*
+             * For every state, start with a clean set of aliases. Aliases from a different state
+             * are not in scope.
+             */
             ExpressionAliases stateAliases = new ExpressionAliases();
             for (PlanNode source : node.getSources()) {
+                /*
+                 * Create a context for each source individually. Aliases from one source
+                 * shouldn't be visible in the context of other sources.
+                 */
                 PlanMatchingContext sourceContext = state.createContext(i++);
                 sourcesMatch = sourcesMatch && source.accept(this, sourceContext);
                 if (!sourcesMatch) {
                     break;
                 }
+
+                /*
+                 * Add the per-source aliases to the per-state aliases.
+                 */
                 stateAliases.putSourceAliases(sourceContext.getExpressionAliases());
             }
+
+            /*
+             * Try upMatching this node with the union of the aliases gathered from the
+             * source nodes.
+             */
             if (sourcesMatch && context.getPattern().upMatches(node, session, metadata, stateAliases)) {
                 context.getExpressionAliases().putSourceAliases(stateAliases);
                 ++upMatchCount;
@@ -119,12 +152,5 @@ final class PlanMatchingVisitor
         }
         checkState(upMatchCount < 2, format("Ambiguous detail match on node %s", node));
         return upMatchCount == 1;
-    }
-
-    private List<PlanMatchingState> filterTerminated(List<PlanMatchingState> states)
-    {
-        return states.stream()
-                .filter(PlanMatchingState::isTerminated)
-                .collect(toImmutableList());
     }
 }

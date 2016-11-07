@@ -13,6 +13,7 @@
  */
 package com.facebook.presto.sql.planner.assertions;
 
+import com.facebook.presto.sql.tree.ArithmeticBinaryExpression;
 import com.facebook.presto.sql.tree.AstVisitor;
 import com.facebook.presto.sql.tree.BooleanLiteral;
 import com.facebook.presto.sql.tree.ComparisonExpression;
@@ -112,6 +113,18 @@ final class ExpressionVerifier
     {
         if (expectedExpression instanceof ComparisonExpression) {
             ComparisonExpression expected = (ComparisonExpression) expectedExpression;
+            if (actual.getType() == expected.getType()) {
+                return process(actual.getLeft(), expected.getLeft()) && process(actual.getRight(), expected.getRight());
+            }
+        }
+        return false;
+    }
+
+    @Override
+    protected Boolean visitArithmeticBinary(ArithmeticBinaryExpression actual, Expression expectedExpression)
+    {
+        if (expectedExpression instanceof ArithmeticBinaryExpression) {
+            ArithmeticBinaryExpression expected = (ArithmeticBinaryExpression) expectedExpression;
             if (actual.getType() == expected.getType()) {
                 return process(actual.getLeft(), expected.getLeft()) && process(actual.getRight(), expected.getRight());
             }

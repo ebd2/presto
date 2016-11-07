@@ -30,7 +30,7 @@ public class CorrelationMatcher
 {
     private final List<String> correlation;
 
-    public CorrelationMatcher(List<String> correlation)
+    CorrelationMatcher(List<String> correlation)
     {
         this.correlation = requireNonNull(correlation, "correlation is null");
     }

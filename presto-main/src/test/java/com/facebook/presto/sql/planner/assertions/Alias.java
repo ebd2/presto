@@ -29,7 +29,7 @@ public class Alias
     private final Optional<String> alias;
     private final RvalueMatcher matcher;
 
-    public Alias(Optional<String> alias, RvalueMatcher matcher)
+    Alias(Optional<String> alias, RvalueMatcher matcher)
     {
         this.alias = requireNonNull(alias, "alias is null");
         this.matcher = requireNonNull(matcher, "matcher is null");

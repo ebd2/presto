@@ -29,7 +29,7 @@ public class OutputMatcher
 {
     private final List<String> aliases;
 
-    public OutputMatcher(ImmutableList<String> aliases)
+    OutputMatcher(ImmutableList<String> aliases)
     {
         this.aliases = ImmutableList.copyOf(requireNonNull(aliases, "aliases is null"));
     }
