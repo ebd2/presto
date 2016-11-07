@@ -21,6 +21,7 @@ import com.facebook.presto.sql.planner.plan.PlanNode;
 import com.facebook.presto.sql.tree.Expression;
 
 import static com.google.common.base.MoreObjects.toStringHelper;
+import static com.google.common.base.Preconditions.checkState;
 import static java.util.Objects.requireNonNull;
 
 final class FilterMatcher
@@ -34,15 +35,18 @@ final class FilterMatcher
     }
 
     @Override
-    public boolean matches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
+    public boolean downMatches(PlanNode node)
     {
-        if (node instanceof FilterNode) {
-            FilterNode filterNode = (FilterNode) node;
-            if (new ExpressionVerifier(expressionAliases).process(filterNode.getPredicate(), predicate)) {
-                return true;
-            }
-        }
-        return false;
+        return node instanceof FilterNode;
+    }
+
+    @Override
+    public boolean upMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
+    {
+        checkState(downMatches(node), "DSL framework error: downMatches returned false in upMatches in %s", this.getClass().getName());
+
+        FilterNode filterNode = (FilterNode) node;
+        return new ExpressionVerifier(expressionAliases).process(filterNode.getPredicate(), predicate);
     }
 
     @Override

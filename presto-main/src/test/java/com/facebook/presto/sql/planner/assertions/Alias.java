@@ -15,45 +15,49 @@ package com.facebook.presto.sql.planner.assertions;
 
 import com.facebook.presto.Session;
 import com.facebook.presto.metadata.Metadata;
+import com.facebook.presto.sql.planner.Symbol;
 import com.facebook.presto.sql.planner.plan.PlanNode;
 
-import static com.google.common.base.MoreObjects.toStringHelper;
-import static com.google.common.base.Preconditions.checkState;
+import java.util.Optional;
+
+import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 
-final class PlanNodeMatcher
-        implements Matcher
+public class Alias
+    implements Matcher
 {
-    private final Class<? extends PlanNode> nodeClass;
+    private final Optional<String> alias;
+    private final RvalueMatcher matcher;
 
-    public PlanNodeMatcher(Class<? extends PlanNode> nodeClass)
+    Alias(Optional<String> alias, RvalueMatcher matcher)
     {
-        this.nodeClass = requireNonNull(nodeClass, "nodeClass is null");
+        this.alias = requireNonNull(alias, "alias is null");
+        this.matcher = requireNonNull(matcher, "matcher is null");
     }
 
     @Override
     public boolean downMatches(PlanNode node)
     {
-        return node.getClass().equals(nodeClass);
+        return true;
     }
 
+    /*
+     * Add aliases on the way back up the tree. Adding them on the way down would put them in the expressionAliases
+     * for matchers that run against the node's sources, which would be incorrect.
+     */
     @Override
     public boolean upMatches(PlanNode node, Session session, Metadata metadata, ExpressionAliases expressionAliases)
     {
-        checkState(downMatches(node), "DSL framework error: downMatches returned false in upMatches in %s", this.getClass().getName());
-        return true;
+        Optional<Symbol> symbol = matcher.getAssignedSymbol(node, session, metadata, expressionAliases);
+        if (symbol.isPresent() && alias.isPresent()) {
+            expressionAliases.put(alias.get(), symbol.get().toSymbolReference());
+        }
+        return symbol.isPresent();
     }
 
     @Override
     public String toString()
     {
-        return toStringHelper(this)
-                .add("nodeClass", nodeClass)
-                .toString();
-    }
-
-    public Class<? extends PlanNode> getNodeClass()
-    {
-        return nodeClass;
+        return format("bind %s -> %s", alias, matcher);
     }
 }
