@@ -32,6 +32,7 @@ import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.node;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.output;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.project;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.strictOutput;
+import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.strictTableScan;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.tableScan;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.values;
 import static com.facebook.presto.sql.planner.plan.JoinNode.Type.INNER;
@@ -76,6 +77,15 @@ public class TestPlanMatchingFramework
         assertMinimallyOptimizedPlan("SELECT orderkey, extendedprice FROM lineitem",
                 strictOutput(ImmutableList.of("ORDERKEY", "EXTENDEDPRICE"),
                         tableScan("lineitem", ImmutableMap.of("ORDERKEY", "orderkey",
+                                "EXTENDEDPRICE", "extendedprice"))));
+    }
+
+    @Test
+    public void testStrictTableScan()
+    {
+        assertMinimallyOptimizedPlan("SELECT orderkey, extendedprice FROM lineitem",
+                output(ImmutableList.of("ORDERKEY", "EXTENDEDPRICE"),
+                        strictTableScan("lineitem", ImmutableMap.of("ORDERKEY", "orderkey",
                                 "EXTENDEDPRICE", "extendedprice"))));
     }
 

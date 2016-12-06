@@ -35,6 +35,7 @@ import com.facebook.presto.sql.tree.Expression;
 import com.facebook.presto.sql.tree.FunctionCall;
 import com.facebook.presto.sql.tree.QualifiedName;
 import com.facebook.presto.sql.tree.WindowFrame;
+import com.facebook.presto.util.ImmutableCollectors;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -47,6 +48,7 @@ import java.util.Optional;
 import static com.facebook.presto.sql.ExpressionUtils.rewriteQualifiedNamesToSymbolReferences;
 import static com.facebook.presto.sql.planner.assertions.MatchResult.NO_MATCH;
 import static com.facebook.presto.sql.planner.assertions.MatchResult.match;
+import static com.facebook.presto.sql.planner.assertions.StrictAssignedSymbolsMatcher.actualAssignments;
 import static com.facebook.presto.sql.planner.assertions.StrictSymbolsMatcher.actualOutputs;
 import static com.facebook.presto.util.ImmutableCollectors.toImmutableList;
 import static com.facebook.presto.util.ImmutableCollectors.toImmutableMap;
@@ -95,6 +97,14 @@ public final class PlanMatchPattern
     {
         PlanMatchPattern result = tableScan(expectedTableName);
         return result.addColumnReferences(expectedTableName, columnReferences);
+    }
+
+    public static PlanMatchPattern strictTableScan(String expectedTableName, Map<String, String> columnReferences)
+    {
+        return tableScan(expectedTableName, columnReferences)
+                .withExactAssignedOutputs(columnReferences.values().stream()
+                        .map(columnName -> columnReference(expectedTableName, columnName))
+                        .collect(ImmutableCollectors.toImmutableList()));
     }
 
     public static PlanMatchPattern constrainedTableScan(String expectedTableName, Map<String, Domain> constraint)
@@ -174,7 +184,7 @@ public final class PlanMatchPattern
 
     public static PlanMatchPattern strictOutput(List<String> outputs, PlanMatchPattern source)
     {
-        return output(outputs, source).with(new StrictSymbolsMatcher(actualOutputs(), outputs));
+        return output(outputs, source).withExactOutputs(outputs);
     }
 
     public static PlanMatchPattern project(PlanMatchPattern source)
@@ -297,6 +307,18 @@ public final class PlanMatchPattern
     public PlanMatchPattern withAlias(Optional<String> alias, RvalueMatcher matcher)
     {
         matchers.add(new Alias(alias, matcher));
+        return this;
+    }
+
+    public PlanMatchPattern withExactOutputs(List<String> expectedAliases)
+    {
+        matchers.add(new StrictSymbolsMatcher(actualOutputs(), expectedAliases));
+        return this;
+    }
+
+    public PlanMatchPattern withExactAssignedOutputs(List<RvalueMatcher> expectedAliases)
+    {
+        matchers.add(new StrictAssignedSymbolsMatcher(actualOutputs(), expectedAliases));
         return this;
     }
 
