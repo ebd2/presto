@@ -41,6 +41,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -200,6 +201,13 @@ public final class PlanMatchPattern
         return result;
     }
 
+    public static PlanMatchPattern strictProject(Map<String, ExpressionMatcher> assignments, PlanMatchPattern source)
+    {
+        return project(assignments, source)
+                .withExactAssignedOutputs(ImmutableList.copyOf(assignments.values()))
+                .withExactAssignments(ImmutableList.copyOf(assignments.values()));
+    }
+
     public static PlanMatchPattern semiJoin(String sourceSymbolAlias, String filteringSymbolAlias, String outputAlias, PlanMatchPattern source, PlanMatchPattern filtering)
     {
         return node(SemiJoinNode.class, source, filtering).with(new SemiJoinMatcher(sourceSymbolAlias, filteringSymbolAlias, outputAlias));
@@ -316,9 +324,15 @@ public final class PlanMatchPattern
         return this;
     }
 
-    public PlanMatchPattern withExactAssignedOutputs(List<RvalueMatcher> expectedAliases)
+    public PlanMatchPattern withExactAssignedOutputs(Collection<RvalueMatcher> expectedAliases)
     {
         matchers.add(new StrictAssignedSymbolsMatcher(actualOutputs(), expectedAliases));
+        return this;
+    }
+
+    public PlanMatchPattern withExactAssignments(Collection<RvalueMatcher> expectedAliases)
+    {
+        matchers.add(new StrictAssignedSymbolsMatcher(actualAssignments(), expectedAliases));
         return this;
     }
 

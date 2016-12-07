@@ -21,19 +21,21 @@ import com.facebook.presto.sql.planner.plan.PlanNode;
 import com.facebook.presto.sql.planner.plan.ProjectNode;
 import com.google.common.collect.ImmutableSet;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 
+import static com.google.common.base.MoreObjects.toStringHelper;
 import static java.util.Objects.requireNonNull;
 
 public class StrictAssignedSymbolsMatcher
         extends BaseStrictSymbolsMatcher
 {
-    private final List<RvalueMatcher> getExpected;
+    private final Collection<RvalueMatcher> getExpected;
 
-    public StrictAssignedSymbolsMatcher(Function<PlanNode, Set<Symbol>> getActual, List<RvalueMatcher> getExpected)
+    public StrictAssignedSymbolsMatcher(Function<PlanNode, Set<Symbol>> getActual, Collection<RvalueMatcher> getExpected)
     {
         super(getActual);
         this.getExpected = requireNonNull(getExpected, "getExpected is null");
@@ -65,4 +67,11 @@ public class StrictAssignedSymbolsMatcher
         return node -> ((ApplyNode) node).getSubqueryAssignments().keySet();
     }
 
+    @Override
+    public String toString()
+    {
+        return toStringHelper(this)
+                .add("exact assignments", getExpected)
+                .toString();
+    }
 }
