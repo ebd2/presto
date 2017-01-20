@@ -23,14 +23,19 @@ import com.facebook.presto.spi.security.SystemAccessControl;
 import javax.security.auth.kerberos.KerberosPrincipal;
 
 import java.security.Principal;
+import java.util.Map;
 
 import static com.facebook.presto.spi.StandardErrorCode.PERMISSION_DENIED;
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static java.lang.String.format;
 
-public class KerberosExactMatchAccessControl
+public class KerberosAuthToLocalAccessControl
         implements SystemAccessControl
 {
+    public KerberosAuthToLocalAccessControl(Map<String, String> config)
+    {
+    }
+
     @Override
     public void checkCanSetUser(Principal principal, String userName)
     {
@@ -52,23 +57,16 @@ public class KerberosExactMatchAccessControl
 
         KerberosPrincipal kerberosPrincipal = (KerberosPrincipal) principal;
 
-        String kerberosUserName = getUserName(kerberosPrincipal);
+        String realmName = kerberosPrincipal.getRealm();
+        String kerberosUserName = kerberosPrincipal.getName();
+
+        if (isNullOrEmpty(realmName)) {
+            kerberosUserName = kerberosUserName.substring(0, kerberosUserName.length() - realmName.length() - 1);
+        }
 
         if (!userName.equals(kerberosUserName)) {
             throw new PrestoException(PERMISSION_DENIED, format("Principal %s may not set user %s", principal.getName(), userName));
         }
-    }
-
-    static String getUserName(KerberosPrincipal kerberosPrincipal)
-    {
-        String realmName = kerberosPrincipal.getRealm();
-        String kerberosUserName = kerberosPrincipal.getName();
-
-        if (!isNullOrEmpty(realmName)) {
-            kerberosUserName = kerberosUserName.substring(0, kerberosUserName.length() - realmName.length() - 1);
-        }
-
-        return kerberosUserName;
     }
 
     @Override

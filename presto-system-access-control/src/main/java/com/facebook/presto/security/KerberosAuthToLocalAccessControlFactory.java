@@ -13,18 +13,23 @@
  */
 package com.facebook.presto.security;
 
-import com.facebook.presto.spi.Plugin;
+import com.facebook.presto.spi.security.SystemAccessControl;
 import com.facebook.presto.spi.security.SystemAccessControlFactory;
-import com.google.common.collect.ImmutableList;
 
-public class SystemAccessControlPlugin
-        implements Plugin
+import java.util.Map;
+
+public class KerberosAuthToLocalAccessControlFactory
+        implements SystemAccessControlFactory
 {
     @Override
-    public Iterable<SystemAccessControlFactory> getSystemAccessControlFactories()
+    public String getName()
     {
-        return ImmutableList.of(
-                new KerberosExactMatchAccessControlFactory(),
-                new KerberosAuthToLocalAccessControlFactory());
+        return "kerberos_auth_to_local";
+    }
+
+    @Override
+    public SystemAccessControl create(Map<String, String> config)
+    {
+        return new KerberosAuthToLocalAccessControl(config);
     }
 }
