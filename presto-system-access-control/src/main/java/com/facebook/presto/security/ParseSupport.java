@@ -83,4 +83,14 @@ class ParseSupport
         }
         return i;
     }
+
+    static int strchr(CharBuffer buffer, char c)
+    {
+        for (int i = 0; i < buffer.remaining();  ++i) {
+            if (buffer.charAt(i) == c) {
+                return i;
+            }
+        }
+        return -1;
+    }
 }

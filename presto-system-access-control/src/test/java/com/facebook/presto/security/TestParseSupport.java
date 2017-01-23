@@ -20,6 +20,7 @@ import java.nio.CharBuffer;
 
 import static com.facebook.presto.security.ParseSupport.peek;
 import static com.facebook.presto.security.ParseSupport.skip;
+import static com.facebook.presto.security.ParseSupport.strchr;
 import static com.facebook.presto.security.ParseSupport.strcspn;
 import static com.facebook.presto.security.ParseSupport.strtoi10;
 import static org.testng.Assert.assertEquals;
@@ -93,5 +94,35 @@ public class TestParseSupport
         skip(buffer, 2);
         assertEquals(peek(buffer), ']');
         assertEquals(strcspn(buffer, chars), 0);
+    }
+
+    @Test
+    public void testStrchr()
+    {
+        CharBuffer buffer = wrap("asdsf");
+        int startPosition = buffer.position();
+
+        // character at position
+        assertEquals(strchr(buffer, 'a'), 0);
+        assertEquals(buffer.position(), startPosition);
+
+        // make sure we find the first instance when there are multiple instances
+        assertEquals(strchr(buffer, 's'), 1);
+        assertEquals(buffer.position(), startPosition);
+
+        // character at limit
+        assertEquals(strchr(buffer, 'f'), 4);
+        assertEquals(buffer.position(), startPosition);
+
+        // character not in buffer
+        assertEquals(strchr(buffer, 'g'), -1);
+        assertEquals(buffer.position(), startPosition);
+
+        // position not at actual beginning of buffer
+        buffer.position(strchr(buffer, 's'));
+
+        assertEquals(strchr(buffer, 's'), 0);
+        skip(buffer, 1);
+        assertEquals(strchr(buffer, 's'), 1);
     }
 }
