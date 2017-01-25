@@ -18,7 +18,7 @@ import org.testng.annotations.Test;
 
 import javax.security.auth.kerberos.KerberosPrincipal;
 
-import static com.facebook.presto.security.TestParseSupport.wrap;
+import static com.facebook.presto.security.ParseSupport.wrap;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 

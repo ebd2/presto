@@ -93,4 +93,9 @@ class ParseSupport
         }
         return -1;
     }
+
+    public static CharBuffer wrap(String s)
+    {
+        return CharBuffer.wrap(s).asReadOnlyBuffer();
+    }
 }

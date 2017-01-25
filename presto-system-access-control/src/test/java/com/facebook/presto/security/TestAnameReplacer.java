@@ -18,7 +18,7 @@ import org.testng.annotations.Test;
 
 import java.nio.CharBuffer;
 
-import static com.facebook.presto.security.TestParseSupport.wrap;
+import static com.facebook.presto.security.ParseSupport.wrap;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 

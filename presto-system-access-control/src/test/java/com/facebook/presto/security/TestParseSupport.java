@@ -23,15 +23,11 @@ import static com.facebook.presto.security.ParseSupport.skip;
 import static com.facebook.presto.security.ParseSupport.strchr;
 import static com.facebook.presto.security.ParseSupport.strcspn;
 import static com.facebook.presto.security.ParseSupport.strtoi10;
+import static com.facebook.presto.security.ParseSupport.wrap;
 import static org.testng.Assert.assertEquals;
 
 public class TestParseSupport
 {
-    public static CharBuffer wrap(String s)
-    {
-        return CharBuffer.wrap(s).asReadOnlyBuffer();
-    }
-
     @Test
     public void testStrtol10Valid()
     {
